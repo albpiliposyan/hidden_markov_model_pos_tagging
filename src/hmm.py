@@ -81,11 +81,8 @@ class HiddenMarkovModel:
         for tag in self.Q:
             count = self.initial_counts[tag]
             tag_idx = self.tag_to_idx[tag]
+            # Add-epsilon smoothing already normalizes
             self.pi[tag_idx] = (count + self.smoothing) / (total_sentences + self.smoothing * n_tags)
-        
-        # Normalize
-        total = self.pi.sum()
-        self.pi = self.pi / total
     
     def _compute_transition_probabilities(self, train_data):
         """Compute A[i][j] = P(tag_j | tag_i)."""
@@ -99,7 +96,7 @@ class HiddenMarkovModel:
             for next_tag in self.Q:
                 self.transition_counts[tag][next_tag] = 0
         
-        # Count transitions
+        # Count transitions and tags
         for sentence in train_data:
             for i in range(len(sentence) - 1):
                 current_tag = sentence[i][1]
@@ -107,8 +104,13 @@ class HiddenMarkovModel:
                 
                 self.transition_counts[current_tag][next_tag] += 1
                 self.tag_counts[current_tag] += 1
+            
+            # Count the last tag in the sentence
+            if sentence:
+                last_tag = sentence[-1][1]
+                self.tag_counts[last_tag] += 1
         
-        # Compute probabilities
+        # Compute probabilities with smoothing
         n_tags = len(self.Q)
         self.A = np.zeros((n_tags, n_tags))
         
@@ -119,15 +121,8 @@ class HiddenMarkovModel:
             for j in range(len(self.Q)):
                 tag_j = self.Q[j]
                 count = self.transition_counts[tag_i][tag_j]
+                # Add-epsilon smoothing already normalizes
                 self.A[i][j] = (count + self.smoothing) / (total + self.smoothing * n_tags)
-        
-        # Normalize rows
-        for i in range(n_tags):
-            row_sum = 0
-            for j in range(n_tags):
-                row_sum += self.A[i][j]
-            for j in range(n_tags):
-                self.A[i][j] = self.A[i][j] / row_sum
     
     def _compute_emission_probabilities(self, train_data):
         """Compute B[i][j] = P(word_j | tag_i)."""
@@ -147,7 +142,7 @@ class HiddenMarkovModel:
                 self.emission_counts[pos][word] += 1
                 tag_total_counts[pos] += 1
         
-        # Compute probabilities
+        # Compute probabilities with smoothing
         n_tags = len(self.Q)
         n_words = len(self.V)
         self.B = np.zeros((n_tags, n_words))
@@ -159,15 +154,8 @@ class HiddenMarkovModel:
             for j in range(len(self.V)):
                 word = self.V[j]
                 count = self.emission_counts[tag][word]
+                # Add-epsilon smoothing already normalizes
                 self.B[i][j] = (count + self.smoothing) / (total + self.smoothing * n_words)
-        
-        # Normalize rows
-        for i in range(n_tags):
-            row_sum = 0
-            for j in range(n_words):
-                row_sum += self.B[i][j]
-            for j in range(n_words):
-                self.B[i][j] = self.B[i][j] / row_sum
     
     def viterbi(self, sentence_words):
         """Viterbi algorithm: find most likely POS tag sequence for sentence."""
@@ -198,23 +186,25 @@ class HiddenMarkovModel:
             word = sentence_words[t]
             
             for s in range(n_states):
+                # Get emission probability for current state and word
                 if word in self.word_to_idx:
                     word_idx = self.word_to_idx[word]
                     emission_prob = self.B[s][word_idx]
                 else:
                     emission_prob = unk_prob
                 
-                # Find max probability path
+                # Find max probability path to this state
                 max_prob = -1
                 max_state = 0
                 
                 for s_prev in range(n_states):
-                    prob = viterbi_matrix[s_prev][t-1] * self.A[s_prev][s] * emission_prob
+                    prob = viterbi_matrix[s_prev][t-1] * self.A[s_prev][s]
                     if prob > max_prob:
                         max_prob = prob
                         max_state = s_prev
                 
-                viterbi_matrix[s][t] = max_prob
+                # Multiply by emission probability once
+                viterbi_matrix[s][t] = max_prob * emission_prob
                 backpointer[s][t] = max_state
         
         # Termination
