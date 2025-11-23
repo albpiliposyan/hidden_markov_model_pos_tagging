@@ -166,9 +166,7 @@ Performance on Armenian UD dataset is evaluated using accuracy metric.
 
 ## References
 
-- Universal Dependencies: https://universaldependencies.org/
 - Armenian UD Treebank: https://github.com/UniversalDependencies/UD_Armenian-ArmTDP
-- Speech and Language Processing (Jurafsky & Martin) - Chapter 8: POS Tagging
 
 ## License
 
