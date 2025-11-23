@@ -95,70 +95,6 @@ This creates visualizations including:
 
 See [VISUALIZATION.md](visualization/VISUALIZATION.md) for detailed documentation.
 
-## Usage Examples
-
-### Training a Model
-
-```python
-from src.hmm import HiddenMarkovModel
-from src.data_utils import load_armenian_dataset
-
-# Load data
-train_data, dev_data, test_data = load_armenian_dataset()
-
-# Train HMM
-hmm = HiddenMarkovModel()
-hmm.train(train_data)
-
-# Save model
-hmm.save('models/my_hmm.pkl')
-```
-
-### Making Predictions
-
-```python
-# Predict POS tags for a sentence
-words = ["Մտածում", "եմ", "՝", "Ադամի", "ու", "Եվայի"]
-tags = hmm.predict(words)
-print(tags)
-# Output: ['VERB', 'AUX', 'PUNCT', 'PROPN', 'CCONJ', 'PROPN']
-```
-
-### Evaluating the Model
-
-```python
-from src.evaluation import evaluate_and_report
-
-# Evaluate on test set
-results = evaluate_and_report(hmm, test_data, "Test")
-print(f"Accuracy: {results['accuracy']:.4f}")
-```
-
-### Loading a Saved Model
-
-```python
-# Load pre-trained model
-hmm = HiddenMarkovModel.load('models/hmm_armenian_pos.pkl')
-
-# Use it directly
-words = ["some", "words"]
-tags = hmm.predict(words)
-```
-
-### Creating Visualizations
-
-```python
-from visualization.visualization import visualize_transition_graph, create_all_visualizations
-
-# Create transition graph
-visualize_transition_graph(hmm, min_prob=0.05)
-
-# Or create all visualizations at once
-create_all_visualizations(hmm, test_data, output_dir='visualizations')
-```
-
-See `visualization/VISUALIZATION.md` for more details.
-
 ## Features
 
 ✅ **Complete HMM Implementation**
@@ -208,13 +144,7 @@ The model learns four key components:
 
 ## Performance
 
-Expected accuracy on Armenian UD dataset: **~85-92%**
-
-Actual performance depends on:
-- Smoothing parameter
-- Vocabulary coverage
-- Dataset size
-- Tag complexity
+Performance on Armenian UD dataset is evaluated using accuracy metric.
 
 ## File Descriptions
 
@@ -234,35 +164,12 @@ Actual performance depends on:
 ### Examples
 - **`examples/basic_usage.py`** - Usage examples and demonstrations
 
-## Future Improvements
-
-### Potential Enhancements
-
-- [ ] Log-space computation to prevent numerical underflow
-- [ ] Forward-Backward algorithm for marginal probabilities
-- [ ] Baum-Welch (EM) algorithm for unsupervised training
-- [ ] Better OOV word handling (morphological features, character n-grams)
-- [ ] Per-tag precision, recall, F1 scores
-- [ ] Cross-validation support
-- [ ] Hyperparameter tuning (grid search)
-- [ ] Command-line interface with argparse
-- [ ] Unit tests and CI/CD
-- [ ] Jupyter notebook tutorial
-
 ## References
 
 - Universal Dependencies: https://universaldependencies.org/
 - Armenian UD Treebank: https://github.com/UniversalDependencies/UD_Armenian-ArmTDP
 - Speech and Language Processing (Jurafsky & Martin) - Chapter 8: POS Tagging
 
-## Contributing
-
-This is an educational project. Feel free to:
-- Report issues
-- Suggest improvements
-- Add features
-- Improve documentation
-
 ## License
 
-Educational project for Statistical NLP coursework.
+Educational project for ASDS25 Statistics course.
