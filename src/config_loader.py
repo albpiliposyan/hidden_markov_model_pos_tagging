@@ -10,8 +10,8 @@ def load_config(config_path='config.cfg'):
     
     if not os.path.isabs(config_path):
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(current_dir)
-        config_path = os.path.join(project_root, config_path)
+        root = os.path.dirname(current_dir)
+        config_path = os.path.join(root, config_path)
     
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")

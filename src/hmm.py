@@ -1,16 +1,18 @@
 """Hidden Markov Model for Part-of-Speech Tagging."""
 
 import numpy as np
+import sys
 
 
 class HiddenMarkovModel:
     """HMM for POS tagging using Maximum Likelihood Estimation."""
     
-    def __init__(self):
+    def __init__(self, use_suffix_model=True):
         """Initialize HMM with default smoothing (1e-10)."""
         self.smoothing = 1e-10
+        self.use_suffix_model = use_suffix_model
         self.Q = None  # States (POS tags)
-        self.V = None  # Vocabulary
+        self.V = None  # Vocabulary (list of unique words)
         self.A = None  # Transition probabilities
         self.B = None  # Emission probabilities
         self.pi = None  # Initial probabilities
@@ -27,6 +29,10 @@ class HiddenMarkovModel:
         self.tag_counts = None
         self.initial_counts = None
         
+        # Suffix-based emission for unknown words
+        self.suffix_tag_counts = {}  # suffix -> {tag: count}
+        self.suffix_probs = {}  # suffix -> {tag: probability}
+        
     def train(self, train_data):
         """Train HMM on labeled data (list of sentences with (word, tag) tuples)."""
         print(f"\nTraining HMM with {len(train_data)} sentences...")
@@ -35,13 +41,18 @@ class HiddenMarkovModel:
         self._build_vocabulary_and_tagset(train_data)
         
         # Compute probabilities
-        self._compute_initial_probabilities(train_data)
-        self._compute_transition_probabilities(train_data)
-        self._compute_emission_probabilities(train_data)
+        self._compute_initial_probabilities(train_data)     # Pi
+        self._compute_transition_probabilities(train_data)  # A
+        self._compute_emission_probabilities(train_data)    # B
+        
+        if self.use_suffix_model:
+            self._compute_suffix_probabilities(train_data)  # Suffix model
         
         print(f"Training complete!")
         print(f"  States (POS tags): {len(self.Q)}")
         print(f"  Vocabulary size: {len(self.V)}")
+        if self.use_suffix_model:
+            print(f"  Suffix patterns: {len(self.suffix_tag_counts)}")
         
     def _build_vocabulary_and_tagset(self, train_data):
         """Extract unique words and POS tags."""
@@ -63,7 +74,7 @@ class HiddenMarkovModel:
         self.idx_to_word = {idx: word for word, idx in self.word_to_idx.items()}
     
     def _compute_initial_probabilities(self, train_data):
-        """Compute π[i] = P(first tag = tag_i)."""
+        """Compute Pi[i] = P(first tag = tag_i)."""
         # Count first tags
         self.initial_counts = {}
         for tag in self.Q:
@@ -81,8 +92,12 @@ class HiddenMarkovModel:
         for tag in self.Q:
             count = self.initial_counts[tag]
             tag_idx = self.tag_to_idx[tag]
-            # Add-epsilon smoothing already normalizes
             self.pi[tag_idx] = (count + self.smoothing) / (total_sentences + self.smoothing * n_tags)
+        
+        # Assertions
+        assert np.isclose(np.sum(self.pi), 1.0), f"Initial probabilities do not sum to 1 (sum={np.sum(self.pi)})"
+        assert np.all(self.pi > 0), "All initial probabilities must be > 0 (due to smoothing)"
+        assert np.all(self.pi <= 1.0), "All initial probabilities must be <= 1.0"
     
     def _compute_transition_probabilities(self, train_data):
         """Compute A[i][j] = P(tag_j | tag_i)."""
@@ -104,25 +119,24 @@ class HiddenMarkovModel:
                 
                 self.transition_counts[current_tag][next_tag] += 1
                 self.tag_counts[current_tag] += 1
-            
-            # Count the last tag in the sentence
-            if sentence:
-                last_tag = sentence[-1][1]
-                self.tag_counts[last_tag] += 1
         
         # Compute probabilities with smoothing
         n_tags = len(self.Q)
         self.A = np.zeros((n_tags, n_tags))
         
-        for i in range(len(self.Q)):
+        for i in range(n_tags):
             tag_i = self.Q[i]
             total = self.tag_counts[tag_i]
             
-            for j in range(len(self.Q)):
+            for j in range(n_tags):
                 tag_j = self.Q[j]
                 count = self.transition_counts[tag_i][tag_j]
-                # Add-epsilon smoothing already normalizes
                 self.A[i][j] = (count + self.smoothing) / (total + self.smoothing * n_tags)
+
+            # Assertions for each row
+            assert np.isclose(np.sum(self.A[i, :]), 1.0), f"Row {i} of Transition matrix A does not sum to 1"
+            assert np.all(self.A[i, :] > 0), f"Row {i} has zero/negative probabilities (smoothing failed)"
+            assert np.all(self.A[i, :] <= 1.0), f"Row {i} has probabilities > 1.0"
     
     def _compute_emission_probabilities(self, train_data):
         """Compute B[i][j] = P(word_j | tag_i)."""
@@ -156,14 +170,62 @@ class HiddenMarkovModel:
                 count = self.emission_counts[tag][word]
                 # Add-epsilon smoothing already normalizes
                 self.B[i][j] = (count + self.smoothing) / (total + self.smoothing * n_words)
+            
+            # Assertions for each row
+            assert np.isclose(np.sum(self.B[i, :]), 1.0), f"Row {i} of Emission matrix B does not sum to 1"
+            assert np.all(self.B[i, :] > 0), f"Row {i} has zero/negative emission probabilities"
+            assert np.all(self.B[i, :] <= 1.0), f"Row {i} has emission probabilities > 1.0"
+    
+    def _compute_suffix_probabilities(self, train_data, suffix_length=3):
+        """Compute emission probabilities based on word suffixes for unknown words."""
+        # Count suffix-tag co-occurrences
+        for sentence in train_data:
+            for word, tag in sentence:
+                if len(word) >= suffix_length:
+                    suffix = word[-suffix_length:]
+                    if suffix not in self.suffix_tag_counts:
+                        self.suffix_tag_counts[suffix] = {}
+                    self.suffix_tag_counts[suffix][tag] = self.suffix_tag_counts[suffix].get(tag, 0) + 1
+        
+        # Compute probabilities with smoothing
+        n_tags = len(self.Q)
+        for suffix, tag_counts in self.suffix_tag_counts.items():
+            total = sum(tag_counts.values())
+            self.suffix_probs[suffix] = {}
+            
+            for tag in self.Q:
+                count = tag_counts.get(tag, 0)
+                self.suffix_probs[suffix][tag] = (count + self.smoothing) / (total + self.smoothing * n_tags)
+    
+    def _get_unknown_word_emission(self, word, tag, suffix_length=3):
+        """Get emission probability for unknown word using suffix information."""
+        if not self.use_suffix_model:
+            # Basic uniform probability for unknown words
+            return 1e-10
+        
+        # Try suffix-based probability
+        if len(word) >= suffix_length:
+            suffix = word[-suffix_length:]
+            if suffix in self.suffix_probs:
+                return self.suffix_probs[suffix].get(tag, 1e-10)
+        
+        # Fallback: open-class tags get higher probability for unknown words
+        open_class_tags = {'NOUN', 'VERB', 'ADJ', 'ADV', 'PROPN', 'NUM'}
+        if tag in open_class_tags:
+            return 1e-8  # Higher probability for open-class
+        else:
+            return 1e-12  # Very low for closed-class (DET, ADP, etc.)
     
     def viterbi(self, sentence_words):
         """Viterbi algorithm: find most likely POS tag sequence for sentence."""
         n_states = len(self.Q)
         n_obs = len(sentence_words)
         
-        # Handle unknown words
-        unk_prob = 1e-10
+        # Input validation
+        assert n_obs > 0, "Cannot run Viterbi on empty sentence"
+        assert self.A is not None, "Model not trained: transition matrix is None"
+        assert self.B is not None, "Model not trained: emission matrix is None"
+        assert self.pi is not None, "Model not trained: initial probabilities is None"
         
         # Initialize matrices
         viterbi_matrix = np.zeros((n_states, n_obs))
@@ -172,12 +234,13 @@ class HiddenMarkovModel:
         # Initialization (t=0)
         for s in range(n_states):
             word = sentence_words[0]
+            tag = self.Q[s]
             
             if word in self.word_to_idx:
                 word_idx = self.word_to_idx[word]
                 emission_prob = self.B[s][word_idx]
             else:
-                emission_prob = unk_prob
+                emission_prob = self._get_unknown_word_emission(word, tag)
             
             viterbi_matrix[s][0] = self.pi[s] * emission_prob
         
@@ -186,12 +249,14 @@ class HiddenMarkovModel:
             word = sentence_words[t]
             
             for s in range(n_states):
+                tag = self.Q[s]
+                
                 # Get emission probability for current state and word
                 if word in self.word_to_idx:
                     word_idx = self.word_to_idx[word]
                     emission_prob = self.B[s][word_idx]
                 else:
-                    emission_prob = unk_prob
+                    emission_prob = self._get_unknown_word_emission(word, tag)
                 
                 # Find max probability path to this state
                 max_prob = -1
@@ -224,6 +289,10 @@ class HiddenMarkovModel:
         
         # Convert to tags
         predicted_tags = [self.idx_to_tag[state] for state in best_path]
+        
+        # Assertions
+        assert len(predicted_tags) == n_obs, f"Predicted {len(predicted_tags)} tags but sentence has {n_obs} words"
+        assert all(tag in self.Q for tag in predicted_tags), "Predicted tag not in tag set"
         
         return predicted_tags
     

@@ -5,7 +5,7 @@ import os
 
 
 def load_conllu_file(filepath):
-    """Load and parse a CoNLL-U file."""
+    """Load and parse a .conllu file."""
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"File not found: {filepath}")
     
@@ -15,20 +15,20 @@ def load_conllu_file(filepath):
 
 
 def extract_word_pos_pairs(sentences):
-    """Extract (word, POS) pairs from parsed CoNLL-U sentences."""
+    """Extract (word, POS) pairs from conllu sentences."""
     dataset = []
     
     for sentence in sentences:
         sentence_pairs = []
         for token in sentence:
-            # Skip multi-word tokens (they have a range like "7-8" as ID)
+            # Skip tokens containing multiple words (check the ID as "7-8")
             if isinstance(token['id'], int):
-                word = token['form']  # The word itself
-                pos = token['upos']   # Universal POS tag
-                if word and pos:  # Make sure both exist
+                word = token['form']
+                pos = token['upos']
+                if word and pos:
                     sentence_pairs.append((word, pos))
         
-        if sentence_pairs:  # Only add non-empty sentences
+        if sentence_pairs:
             dataset.append(sentence_pairs)
     
     return dataset
@@ -50,18 +50,18 @@ def get_vocabulary_and_tagset(dataset):
 def print_dataset_stats(dataset, name="Dataset"):
     """Print statistics about the dataset."""
     vocab, tags = get_vocabulary_and_tagset(dataset)
-    total_tokens = sum(len(sent) for sent in dataset)
+    total_words = sum(len(sentence) for sentence in dataset)
     
     print(f"\n{name} Statistics:")
     print(f"  Number of sentences: {len(dataset)}")
-    print(f"  Total tokens: {total_tokens}")
+    print(f"  Total words: {total_words}")
     print(f"  Vocabulary size: {len(vocab)}")
     print(f"  Number of POS tags: {len(tags)}")
     print(f"  POS tags: {sorted(tags)}")
 
 
 def load_armenian_dataset(dataset_dir='dataset'):
-    """Load Armenian UD dataset and return (train_data, dev_data, test_data)."""
+    """Load dataset and return (train_data, dev_data, test_data)."""
     train_path = os.path.join(dataset_dir, 'hy_armtdp-ud-train.conllu')
     dev_path = os.path.join(dataset_dir, 'hy_armtdp-ud-dev.conllu')
     test_path = os.path.join(dataset_dir, 'hy_armtdp-ud-test.conllu')

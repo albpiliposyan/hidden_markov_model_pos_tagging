@@ -6,8 +6,7 @@ from data_utils import load_armenian_dataset, print_dataset_stats
 from evaluation import (
     evaluate_and_report, 
     print_sample_predictions, 
-    print_hmm_summary,
-    analyze_errors
+    print_hmm_summary
 )
 from config_loader import (
     load_config,
@@ -30,45 +29,43 @@ def main(config_path='config.cfg'):
         output_cfg = {'verbose': True, 'print_hmm_summary': True, 'print_dataset_stats': True}
     
     print("\n" + "="*70)
-    print("HMM-based POS Tagger for Armenian Language")
+    print("HMM-based POS Tagger for Armenian language")
     print("="*70)
     
     # Load Data
     print("\n[1] Loading Dataset...")
     train_data, dev_data, test_data = load_armenian_dataset()
     
+    # Combine train and dev datasets
+    combined_train_data = train_data + dev_data
+    print(f"\nCombining training and development sets:")
+    print(f"  Original training: {len(train_data)} sentences")
+    print(f"  Development: {len(dev_data)} sentences")
+    print(f"  Combined: {len(combined_train_data)} sentences")
+    
     if output_cfg['print_dataset_stats']:
-        print_dataset_stats(train_data, "Training Set")
-        print_dataset_stats(dev_data, "Development Set")
+        print_dataset_stats(combined_train_data, "Combined Training Set")
         print_dataset_stats(test_data, "Test Set")
     
-    # Train HMM
-    print("\n[2] Training HMM...")
+    # Train HMM on combined data
+    print("\n[2] Training HMM on Combined Data...")
     hmm = HiddenMarkovModel()
-    hmm.train(train_data)
+    hmm.train(combined_train_data)
     
     if output_cfg['print_hmm_summary']:
         print_hmm_summary(hmm)
     
-    # Evaluate on Development Set
-    print("\n[3] Evaluating on Development Set...")
-    dev_results = evaluate_and_report(hmm, dev_data, "Development")
-    
     # Evaluate on Test Set
-    print("\n[4] Evaluating on Test Set...")
+    print("\n[3] Evaluating on Test Set...")
     test_results = evaluate_and_report(hmm, test_data, "Test")
     
     # Sample Predictions
-    print("\n[5] Sample Predictions...")
-    print_sample_predictions(hmm, test_data, n_samples=2, max_tokens=15)
-    
-    # Error Analysis
-    print("\n[6] Error Analysis...")
-    analyze_errors(hmm, test_data, max_errors=10)
+    print("\n[4] Sample Predictions...")
+    print_sample_predictions(hmm, test_data, n_samples=1, max_tokens=15)
     
     # Save Model
     if training_cfg['save_model']:
-        print("\n[7] Saving Model...")
+        print("\n[5] Saving Model...")
         os.makedirs(training_cfg['model_dir'], exist_ok=True)
         model_path = os.path.join(training_cfg['model_dir'], training_cfg['model_name'])
         hmm.save(model_path)
