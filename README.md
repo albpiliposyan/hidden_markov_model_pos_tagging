@@ -10,21 +10,27 @@ hidden_markov_model/
 │   ├── hy_armtdp-ud-train.conllu
 │   ├── hy_armtdp-ud-dev.conllu
 │   └── hy_armtdp-ud-test.conllu
-├── src/                       # Source code
-│   ├── hmm.py                # HMM class implementation
+├── src/                       # Core source code
+│   ├── hmm.py                # Main HMM implementation
+│   ├── hmm_trigram.py        # Trigram (2nd-order) HMM
 │   ├── data_utils.py         # Data loading utilities
-│   ├── evaluation.py         # Evaluation and analysis tools
-│   ├── config_loader.py      # Configuration file loader
+│   ├── evaluation.py         # Evaluation and analysis
+│   ├── config_loader.py      # Configuration loader
 │   └── main.py               # Main training script
-├── visualization/             # Visualization tools (optional)
-│   ├── visualization.py      # Visualization functions
-│   ├── visualize_hmm.py      # Visualization demo script
-│   └── VISUALIZATION.md      # Visualization documentation
-├── examples/                  # Usage examples
-│   └── basic_usage.py
+├── examples/                  # Example scripts
+│   ├── basic_usage.py        # Simple usage example
+│   ├── compare_models.py     # Compare HMM variants
+│   └── tag_custom_text.py    # Tag custom Armenian text
+├── visualization/             # Visualization module
+│   ├── visualization.py      # Visualization library
+│   ├── visualize_all.py      # Generate all visualizations
+│   ├── VISUALIZATION.md      # Original documentation
+│   └── VISUALIZATION_GUIDE.md # Comprehensive guide
+├── visualizations/            # Generated plots (created at runtime)
 ├── models/                    # Saved trained models
 ├── config.cfg                 # Configuration file
 ├── requirements.txt           # Python dependencies
+├── DATASET.md                # Dataset documentation
 └── README.md                 # This file
 ```
 
@@ -44,54 +50,32 @@ pip install -r requirements.txt
 ### 2. Train and Evaluate HMM
 
 ```bash
-# Using default config.cfg
+# Main training pipeline
 python src/main.py
 
-# Or specify a custom config file
-python src/main.py my_config.cfg
+# Compare different HMM variants
+python examples/compare_models.py
+
+# Tag custom Armenian text
+python examples/tag_custom_text.py
 ```
 
-This will:
-- Load the Armenian UD dataset
-- Train the HMM model with parameters from config.cfg
-- Evaluate on dev and test sets
-- Display sample predictions
-- Perform error analysis
-- Save the trained model
-
-### 3. Configuration
-
-Edit `config.cfg` to customize training and evaluation:
-
-```ini
-[dataset]
-train_path = dataset/hy_armtdp-ud-train.conllu
-dev_path = dataset/hy_armtdp-ud-dev.conllu
-test_path = dataset/hy_armtdp-ud-test.conllu
-
-[training]
-random_seed = 42
-
-[output]
-save_model = True
-model_path = models/hmm_armenian_pos.pkl
-```
-
-See `config.cfg` for all available options.
-
-### 4. Visualize the HMM
+### 3. Generate Visualizations
 
 ```bash
-```bash
-python visualization/visualize_hmm.py
+# Generate all visualizations
+python visualization/visualize_all.py
+
+# Output will be saved to visualizations/ directory
 ```
 
-This creates visualizations including:
-- State transition graph
-- Transition matrix heatmap
-- Emission probabilities
-- Confusion matrix
-- Viterbi path examples
+This creates comprehensive visualizations including:
+- Model comparison charts
+- Suffix pattern analysis
+- Known vs unknown word performance
+- State transition graphs and matrices
+- Confusion matrices
+- Viterbi decoding examples
 
 See [VISUALIZATION.md](visualization/VISUALIZATION.md) for detailed documentation.
 

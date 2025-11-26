@@ -5,6 +5,8 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.patches import FancyBboxPatch
@@ -77,8 +79,7 @@ def visualize_transition_graph(hmm, min_prob=0.05, figsize=(16, 12), save_path=N
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Transition graph saved to {save_path}")
-    
-    plt.show()
+    plt.close()
 
 
 def visualize_transition_matrix(hmm, figsize=(14, 12), save_path=None):
@@ -102,8 +103,7 @@ def visualize_transition_matrix(hmm, figsize=(14, 12), save_path=None):
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Transition matrix saved to {save_path}")
-    
-    plt.show()
+    plt.close()
 
 
 def visualize_emission_probabilities(hmm, tag='NOUN', top_n=20, figsize=(12, 6), save_path=None):
@@ -150,8 +150,7 @@ def visualize_emission_probabilities(hmm, tag='NOUN', top_n=20, figsize=(12, 6),
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Emission probabilities saved to {save_path}")
-    
-    plt.show()
+    plt.close()
 
 
 def visualize_initial_probabilities(hmm, figsize=(12, 6), save_path=None):
@@ -185,8 +184,7 @@ def visualize_initial_probabilities(hmm, figsize=(12, 6), save_path=None):
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Initial probabilities saved to {save_path}")
-    
-    plt.show()
+    plt.close()
 
 
 def visualize_viterbi_path(hmm, sentence_words, true_tags=None, figsize=(14, 8), save_path=None):
@@ -265,8 +263,7 @@ def visualize_viterbi_path(hmm, sentence_words, true_tags=None, figsize=(14, 8),
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Viterbi path saved to {save_path}")
-    
-    plt.show()
+    plt.close()
 
 
 def visualize_confusion_matrix(hmm, test_data, figsize=(14, 12), save_path=None):
@@ -295,8 +292,223 @@ def visualize_confusion_matrix(hmm, test_data, figsize=(14, 12), save_path=None)
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Confusion matrix saved to {save_path}")
+    plt.close()
+
+
+def visualize_model_comparison(models_dict, figsize=(12, 7), save_path=None):
+    """Compare multiple HMM models with a bar chart."""
+    plt.figure(figsize=figsize)
     
-    plt.show()
+    model_names = list(models_dict.keys())
+    accuracies = [models_dict[name] * 100 for name in model_names]
+    
+    colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6'][:len(model_names)]
+    bars = plt.bar(model_names, accuracies, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+    
+    # Add value labels on top of bars
+    for i, (bar, acc) in enumerate(zip(bars, accuracies)):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                f'{acc:.2f}%', ha='center', va='bottom', fontsize=12, fontweight='bold')
+    
+    plt.ylabel('Accuracy (%)', fontsize=13, fontweight='bold')
+    plt.xlabel('Model', fontsize=13, fontweight='bold')
+    plt.title('HMM Model Comparison', fontsize=15, fontweight='bold', pad=20)
+    plt.ylim(0, 100)
+    plt.grid(axis='y', alpha=0.3, linestyle='--')
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Saved to {save_path}")
+    plt.close()
+
+
+def visualize_suffix_patterns(hmm, top_n=30, figsize=(14, 10), save_path=None):
+    """Visualize the most common suffix patterns learned by the suffix model."""
+    if not hasattr(hmm, 'suffix_probs') or not hmm.suffix_probs:
+        print("No suffix patterns found. Model must be trained with use_suffix_model=True.")
+        return
+    
+    # Get suffix frequencies
+    suffix_counts = {}
+    for suffix in hmm.suffix_probs:
+        suffix_counts[suffix] = sum(hmm.suffix_probs[suffix].values())
+    
+    # Sort by frequency
+    sorted_suffixes = sorted(suffix_counts.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    
+    # Prepare data for heatmap
+    suffixes = [s for s, _ in sorted_suffixes]
+    tags = sorted(hmm.Q)
+    
+    # Create matrix: rows=suffixes, cols=tags
+    matrix = np.zeros((len(suffixes), len(tags)))
+    for i, suffix in enumerate(suffixes):
+        for j, tag in enumerate(tags):
+            if tag in hmm.suffix_probs[suffix]:
+                matrix[i][j] = hmm.suffix_probs[suffix][tag]
+    
+    # Create heatmap
+    plt.figure(figsize=figsize)
+    sns.heatmap(matrix, xticklabels=tags, yticklabels=suffixes,
+               cmap='YlOrRd', cbar_kws={'label': 'Probability'},
+               linewidths=0.5, linecolor='gray', annot=False)
+    
+    plt.xlabel('POS Tag', fontsize=12, fontweight='bold')
+    plt.ylabel('Suffix Pattern', fontsize=12, fontweight='bold')
+    plt.title(f'Top {top_n} Suffix Patterns and Their Tag Probabilities', 
+             fontsize=14, fontweight='bold', pad=15)
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0, fontsize=9)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Saved to {save_path}")
+    plt.close()
+
+
+def visualize_unknown_word_performance(hmm, test_data, figsize=(10, 6), save_path=None):
+    """Compare model performance on known vs unknown words."""
+    # Separate predictions for known and unknown words
+    known_correct = 0
+    known_total = 0
+    unknown_correct = 0
+    unknown_total = 0
+    
+    for sentence in test_data:
+        words = [word for word, _ in sentence]
+        true_tags = [tag for _, tag in sentence]
+        predicted_tags = hmm.viterbi(words)
+        
+        for word, true_tag, pred_tag in zip(words, true_tags, predicted_tags):
+            if word in hmm.word_to_idx:
+                known_total += 1
+                if pred_tag == true_tag:
+                    known_correct += 1
+            else:
+                unknown_total += 1
+                if pred_tag == true_tag:
+                    unknown_correct += 1
+    
+    # Calculate accuracies
+    known_acc = (known_correct / known_total * 100) if known_total > 0 else 0
+    unknown_acc = (unknown_correct / unknown_total * 100) if unknown_total > 0 else 0
+    
+    # Create bar chart
+    plt.figure(figsize=figsize)
+    
+    categories = ['Known Words', 'Unknown Words']
+    accuracies = [known_acc, unknown_acc]
+    counts = [f'{known_correct}/{known_total}', f'{unknown_correct}/{unknown_total}']
+    
+    colors = ['#2ecc71', '#e74c3c']
+    bars = plt.bar(categories, accuracies, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+    
+    # Add value labels
+    for bar, acc, count in zip(bars, accuracies, counts):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height + 1,
+                f'{acc:.2f}%\n({count})', ha='center', va='bottom', 
+                fontsize=11, fontweight='bold')
+    
+    plt.ylabel('Accuracy (%)', fontsize=13, fontweight='bold')
+    plt.xlabel('Word Type', fontsize=13, fontweight='bold')
+    plt.title('Model Performance: Known vs Unknown Words', fontsize=15, fontweight='bold', pad=20)
+    plt.ylim(0, 100)
+    plt.grid(axis='y', alpha=0.3, linestyle='--')
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Saved to {save_path}")
+    plt.close()
+    
+    return {
+        'known_accuracy': known_acc,
+        'unknown_accuracy': unknown_acc,
+        'known_correct': known_correct,
+        'known_total': known_total,
+        'unknown_correct': unknown_correct,
+        'unknown_total': unknown_total
+    }
+
+
+def compare_models_on_word_types(models_dict, test_data, figsize=(12, 6), save_path=None):
+    """Compare multiple models on known vs unknown words."""
+    results = {}
+    
+    # Evaluate each model
+    for model_name, hmm in models_dict.items():
+        known_correct = 0
+        known_total = 0
+        unknown_correct = 0
+        unknown_total = 0
+        
+        for sentence in test_data:
+            words = [word for word, _ in sentence]
+            true_tags = [tag for _, tag in sentence]
+            predicted_tags = hmm.viterbi(words)
+            
+            for word, true_tag, pred_tag in zip(words, true_tags, predicted_tags):
+                if word in hmm.word_to_idx:
+                    known_total += 1
+                    if pred_tag == true_tag:
+                        known_correct += 1
+                else:
+                    unknown_total += 1
+                    if pred_tag == true_tag:
+                        unknown_correct += 1
+        
+        known_acc = (known_correct / known_total * 100) if known_total > 0 else 0
+        unknown_acc = (unknown_correct / unknown_total * 100) if unknown_total > 0 else 0
+        
+        results[model_name] = {
+            'known': known_acc,
+            'unknown': unknown_acc
+        }
+    
+    # Create grouped bar chart
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    model_names = list(results.keys())
+    known_accs = [results[name]['known'] for name in model_names]
+    unknown_accs = [results[name]['unknown'] for name in model_names]
+    
+    x = np.arange(len(model_names))
+    width = 0.35
+    
+    bars1 = ax.bar(x - width/2, known_accs, width, label='Known Words', 
+                   color='#2ecc71', alpha=0.8, edgecolor='black', linewidth=1.5)
+    bars2 = ax.bar(x + width/2, unknown_accs, width, label='Unknown Words',
+                   color='#e74c3c', alpha=0.8, edgecolor='black', linewidth=1.5)
+    
+    # Add value labels
+    for bars in [bars1, bars2]:
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                   f'{height:.1f}%', ha='center', va='bottom', 
+                   fontsize=10, fontweight='bold')
+    
+    ax.set_ylabel('Accuracy (%)', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Model', fontsize=13, fontweight='bold')
+    ax.set_title('Model Comparison: Known vs Unknown Words', fontsize=15, fontweight='bold', pad=20)
+    ax.set_xticks(x)
+    ax.set_xticklabels(model_names)
+    ax.legend(fontsize=11, loc='lower right')
+    ax.set_ylim(0, 100)
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Saved to {save_path}")
+    plt.close()
+    
+    return results
 
 
 def create_all_visualizations(hmm, test_data, output_dir='visualizations'):

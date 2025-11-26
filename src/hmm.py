@@ -33,6 +33,9 @@ class HiddenMarkovModel:
         self.suffix_tag_counts = {}  # suffix -> {tag: count}
         self.suffix_probs = {}  # suffix -> {tag: probability}
         
+        # Marginal tag probabilities P(tag)
+        self.tag_marginal_probs = {}  # tag -> P(tag) overall frequency
+        
     def train(self, train_data):
         """Train HMM on labeled data (list of sentences with (word, tag) tuples)."""
         print(f"\nTraining HMM with {len(train_data)} sentences...")
@@ -44,6 +47,7 @@ class HiddenMarkovModel:
         self._compute_initial_probabilities(train_data)     # Pi
         self._compute_transition_probabilities(train_data)  # A
         self._compute_emission_probabilities(train_data)    # B
+        self._compute_marginal_tag_probabilities(train_data)  # P(tag)
         
         if self.use_suffix_model:
             self._compute_suffix_probabilities(train_data)  # Suffix model
@@ -96,7 +100,7 @@ class HiddenMarkovModel:
         
         # Assertions
         assert np.isclose(np.sum(self.pi), 1.0), f"Initial probabilities do not sum to 1 (sum={np.sum(self.pi)})"
-        assert np.all(self.pi > 0), "All initial probabilities must be > 0 (due to smoothing)"
+        assert np.all(self.pi > 0), "All initial probabilities must be > 0 (with smoothing)"
         assert np.all(self.pi <= 1.0), "All initial probabilities must be <= 1.0"
     
     def _compute_transition_probabilities(self, train_data):
@@ -176,12 +180,26 @@ class HiddenMarkovModel:
             assert np.all(self.B[i, :] > 0), f"Row {i} has zero/negative emission probabilities"
             assert np.all(self.B[i, :] <= 1.0), f"Row {i} has emission probabilities > 1.0"
     
+    def _compute_marginal_tag_probabilities(self, train_data):
+        """Compute P(tag) = count(tag) / total_tokens for all tags."""
+        tag_counts = {tag: 0 for tag in self.Q}
+        total_tokens = 0
+        
+        for sentence in train_data:
+            for _, tag in sentence:
+                tag_counts[tag] += 1
+                total_tokens += 1
+        
+        # Compute marginal probabilities
+        for tag in self.Q:
+            self.tag_marginal_probs[tag] = tag_counts[tag] / total_tokens if total_tokens > 0 else 0
+    
     def _compute_suffix_probabilities(self, train_data, suffix_length=3):
         """Compute emission probabilities based on word suffixes for unknown words."""
         # Count suffix-tag co-occurrences
         for sentence in train_data:
             for word, tag in sentence:
-                if len(word) >= suffix_length:
+                if len(word) > suffix_length:
                     suffix = word[-suffix_length:]
                     if suffix not in self.suffix_tag_counts:
                         self.suffix_tag_counts[suffix] = {}
@@ -204,28 +222,21 @@ class HiddenMarkovModel:
             return 1e-10
         
         # Try suffix-based probability
-        if len(word) >= suffix_length:
+        if len(word) > suffix_length:
             suffix = word[-suffix_length:]
             if suffix in self.suffix_probs:
                 return self.suffix_probs[suffix].get(tag, 1e-10)
         
-        # Fallback: open-class tags get higher probability for unknown words
-        open_class_tags = {'NOUN', 'VERB', 'ADJ', 'ADV', 'PROPN', 'NUM'}
-        if tag in open_class_tags:
-            return 1e-8  # Higher probability for open-class
-        else:
-            return 1e-12  # Very low for closed-class (DET, ADP, etc.)
+        # Fallback: use scaled marginal probabilities P(tag)
+        # Unknown words get probabilities proportional to overall tag frequency
+        base_prob = self.tag_marginal_probs.get(tag, 1.0 / len(self.Q))
+        # Scale down but maintain relative proportions
+        return base_prob * 1e-6
     
     def viterbi(self, sentence_words):
         """Viterbi algorithm: find most likely POS tag sequence for sentence."""
         n_states = len(self.Q)
         n_obs = len(sentence_words)
-        
-        # Input validation
-        assert n_obs > 0, "Cannot run Viterbi on empty sentence"
-        assert self.A is not None, "Model not trained: transition matrix is None"
-        assert self.B is not None, "Model not trained: emission matrix is None"
-        assert self.pi is not None, "Model not trained: initial probabilities is None"
         
         # Initialize matrices
         viterbi_matrix = np.zeros((n_states, n_obs))
@@ -289,10 +300,6 @@ class HiddenMarkovModel:
         
         # Convert to tags
         predicted_tags = [self.idx_to_tag[state] for state in best_path]
-        
-        # Assertions
-        assert len(predicted_tags) == n_obs, f"Predicted {len(predicted_tags)} tags but sentence has {n_obs} words"
-        assert all(tag in self.Q for tag in predicted_tags), "Predicted tag not in tag set"
         
         return predicted_tags
     

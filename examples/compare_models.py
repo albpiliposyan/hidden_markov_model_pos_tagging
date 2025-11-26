@@ -2,7 +2,7 @@
 
 import os
 import sys
-sys.path.insert(0, 'src')
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from hmm import HiddenMarkovModel
 from hmm_trigram import TrigramHMM
@@ -48,13 +48,13 @@ def main():
     suffix_hmm = HiddenMarkovModel(use_suffix_model=True)
     suffix_hmm.train(combined_train_data)
     
-    # Train Trigram HMM
-    print("\n[4] Training Trigram HMM (second-order)...")
-    trigram_hmm = TrigramHMM()
-    trigram_hmm.train(combined_train_data)
+    # # Train Trigram HMM (commented out - too slow)
+    # print("\n[4] Training Trigram HMM (second-order)...")
+    # trigram_hmm = TrigramHMM()
+    # trigram_hmm.train(combined_train_data)
     
     # Evaluate All Models
-    print("\n[5] Evaluating All Models on Test Set...")
+    print("\n[4] Evaluating All Models on Test Set...")
     print("\n" + "-"*70)
     
     # Count unknown words (same for all models since same vocabulary)
@@ -78,11 +78,11 @@ def main():
     print(f"  Accuracy: {suffix_results['accuracy']:.4f} ({suffix_results['accuracy']*100:.2f}%)")
     print(f"  Correct: {suffix_results['correct']}/{suffix_results['total_tokens']}")
     
-    # Trigram HMM
-    trigram_results = trigram_hmm.evaluate(test_data)
-    print("\nTrigram HMM (Second-Order) Results:")
-    print(f"  Accuracy: {trigram_results['accuracy']:.4f} ({trigram_results['accuracy']*100:.2f}%)")
-    print(f"  Correct: {trigram_results['correct']}/{trigram_results['total_tokens']}")
+    # # Trigram HMM (commented out - too slow)
+    # trigram_results = trigram_hmm.evaluate(test_data)
+    # print("\nTrigram HMM (Second-Order) Results:")
+    # print(f"  Accuracy: {trigram_results['accuracy']:.4f} ({trigram_results['accuracy']*100:.2f}%)")
+    # print(f"  Correct: {trigram_results['correct']}/{trigram_results['total_tokens']}")
     
     # Comparison
     print("\n" + "="*70)
@@ -90,13 +90,11 @@ def main():
     print("="*70)
     print(f"\nBasic HMM (Bigram):           {basic_results['accuracy']*100:.2f}%")
     print(f"Suffix-Enhanced HMM (Bigram): {suffix_results['accuracy']*100:.2f}%")
-    print(f"Trigram HMM (Second-Order):   {trigram_results['accuracy']*100:.2f}%")
+    # print(f"Trigram HMM (Second-Order):   {trigram_results['accuracy']*100:.2f}%")
     
-    best_accuracy = max(basic_results['accuracy'], suffix_results['accuracy'], trigram_results['accuracy'])
+    best_accuracy = max(basic_results['accuracy'], suffix_results['accuracy'])
     if best_accuracy == suffix_results['accuracy']:
         winner = "Suffix-Enhanced HMM (Bigram)"
-    elif best_accuracy == trigram_results['accuracy']:
-        winner = "Trigram HMM"
     else:
         winner = "Basic HMM (Bigram)"
     

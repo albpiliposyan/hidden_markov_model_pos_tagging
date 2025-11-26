@@ -1,10 +1,10 @@
 """Tag custom Armenian text with trained HMM model."""
 
 import sys
-sys.path.insert(0, 'src')
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from hmm import HiddenMarkovModel
-import os
 
 
 def tokenize_armenian(text):
