@@ -1,0 +1,75 @@
+======================================================================
+UNKNOWN SUFFIX ANALYSIS
+======================================================================
+
+Loading data...
+Loading CoNLL-U files...
+Extracting word-POS pairs...
+Training sentences: 2223
+Test sentences: 277
+
+======================================================================
+SUFFIX LENGTH n=2
+======================================================================
+
+Training Suffix-Enhanced HMM (n=2)...
+
+Training HMM with 2223 sentences...
+Training complete!
+  States (POS tags): 17
+  Vocabulary size: 12986
+  Suffix patterns: 591
+
+Analyzing unknown words in test set...
+
+Unknown Word Suffix Statistics:
+  Total unknown words: 1348
+  Words with KNOWN suffixes: 1316 (97.63%)
+  Words with UNKNOWN suffixes: 20 (1.48%)
+  Words too short for suffix: 12 (0.89%)
+
+Overall Accuracy: 88.40%
+
+======================================================================
+SUFFIX LENGTH n=3
+======================================================================
+
+Training Suffix-Enhanced HMM (n=3)...
+
+Training HMM with 2223 sentences...
+Training complete!
+  States (POS tags): 17
+  Vocabulary size: 12986
+  Suffix patterns: 1914
+
+Analyzing unknown words in test set...
+
+Unknown Word Suffix Statistics:
+  Total unknown words: 1348
+  Words with KNOWN suffixes: 1157 (85.83%)
+  Words with UNKNOWN suffixes: 117 (8.68%)
+  Words too short for suffix: 74 (5.49%)
+
+Overall Accuracy: 89.70%
+
+======================================================================
+SUFFIX LENGTH n=4
+======================================================================
+
+Training Suffix-Enhanced HMM (n=4)...
+
+Training HMM with 2223 sentences...
+Training complete!
+  States (POS tags): 17
+  Vocabulary size: 12986
+  Suffix patterns: 3705
+
+Analyzing unknown words in test set...
+
+Unknown Word Suffix Statistics:
+  Total unknown words: 1348
+  Words with KNOWN suffixes: 848 (62.91%)
+  Words with UNKNOWN suffixes: 338 (25.07%)
+  Words too short for suffix: 162 (12.02%)
+
+Overall Accuracy: 88.66%
