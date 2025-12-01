@@ -7,15 +7,16 @@ import sys
 class HiddenMarkovModel:
     """HMM for POS tagging using Maximum Likelihood Estimation."""
     
-    def __init__(self, use_suffix_model=True):
+    def __init__(self, use_suffix_model=True, suffix_length=3):
         """Initialize HMM with default smoothing (1e-10)."""
         self.smoothing = 1e-10
         self.use_suffix_model = use_suffix_model
-        self.Q = None  # States (POS tags)
-        self.V = None  # Vocabulary (list of unique words)
-        self.A = None  # Transition probabilities
-        self.B = None  # Emission probabilities
-        self.pi = None  # Initial probabilities
+        self.suffix_length = suffix_length  # Length of suffix for unknown word handling
+        self.states = None  # States (POS tags)
+        self.vocabulary = None  # Vocabulary (list of unique words)
+        self.transition_probs = None  # Transition probabilities: P(tag_j | tag_i)
+        self.emission_probs = None  # Emission probabilities: P(word_j | tag_i)
+        self.initial_probs = None  # Initial probabilities: P(first tag = tag_i)
         
         # Mappings
         self.tag_to_idx = {}
@@ -31,7 +32,7 @@ class HiddenMarkovModel:
         
         # Suffix-based emission for unknown words
         self.suffix_tag_counts = {}  # suffix -> {tag: count}
-        self.suffix_probs = {}  # suffix -> {tag: probability}
+        self.suffix_probs = {}  # suffix -> {tag: probability}: P(tag | suffix)
         
         # Marginal tag probabilities P(tag)
         self.tag_marginal_probs = {}  # tag -> P(tag) overall frequency
@@ -50,11 +51,11 @@ class HiddenMarkovModel:
         self._compute_marginal_tag_probabilities(train_data)  # P(tag)
         
         if self.use_suffix_model:
-            self._compute_suffix_probabilities(train_data)  # Suffix model
+            self._compute_suffix_probabilities(train_data, suffix_length=self.suffix_length)  # Suffix model
         
         print(f"Training complete!")
-        print(f"  States (POS tags): {len(self.Q)}")
-        print(f"  Vocabulary size: {len(self.V)}")
+        print(f"  States (POS tags): {len(self.states)}")
+        print(f"  Vocabulary size: {len(self.vocabulary)}")
         if self.use_suffix_model:
             print(f"  Suffix patterns: {len(self.suffix_tag_counts)}")
         
@@ -68,20 +69,20 @@ class HiddenMarkovModel:
                 Q.add(pos)
                 V.add(word)
         
-        self.Q = sorted(list(Q))
-        self.V = sorted(list(V))
+        self.states = sorted(list(Q))
+        self.vocabulary = sorted(list(V))
         
         # Create mappings
-        self.tag_to_idx = {tag: idx for idx, tag in enumerate(self.Q)}
+        self.tag_to_idx = {tag: idx for idx, tag in enumerate(self.states)}
         self.idx_to_tag = {idx: tag for tag, idx in self.tag_to_idx.items()}
-        self.word_to_idx = {word: idx for idx, word in enumerate(self.V)}
+        self.word_to_idx = {word: idx for idx, word in enumerate(self.vocabulary)}
         self.idx_to_word = {idx: word for word, idx in self.word_to_idx.items()}
     
     def _compute_initial_probabilities(self, train_data):
         """Compute Pi[i] = P(first tag = tag_i)."""
         # Count first tags
         self.initial_counts = {}
-        for tag in self.Q:
+        for tag in self.states:
             self.initial_counts[tag] = 0
         
         for sentence in train_data:
@@ -90,29 +91,29 @@ class HiddenMarkovModel:
                 self.initial_counts[first_tag] += 1
         
         total_sentences = len(train_data)
-        n_tags = len(self.Q)
-        self.pi = np.zeros(n_tags)
+        n_tags = len(self.states)
+        self.initial_probs = np.zeros(n_tags)
         
-        for tag in self.Q:
+        for tag in self.states:
             count = self.initial_counts[tag]
             tag_idx = self.tag_to_idx[tag]
-            self.pi[tag_idx] = (count + self.smoothing) / (total_sentences + self.smoothing * n_tags)
+            self.initial_probs[tag_idx] = (count + self.smoothing) / (total_sentences + self.smoothing * n_tags)
         
         # Assertions
-        assert np.isclose(np.sum(self.pi), 1.0), f"Initial probabilities do not sum to 1 (sum={np.sum(self.pi)})"
-        assert np.all(self.pi > 0), "All initial probabilities must be > 0 (with smoothing)"
-        assert np.all(self.pi <= 1.0), "All initial probabilities must be <= 1.0"
+        assert np.isclose(np.sum(self.initial_probs), 1.0), f"Initial probabilities do not sum to 1 (sum={np.sum(self.initial_probs)})"
+        assert np.all(self.initial_probs > 0), "All initial probabilities must be > 0 (with smoothing)"
+        assert np.all(self.initial_probs <= 1.0), "All initial probabilities must be <= 1.0"
     
     def _compute_transition_probabilities(self, train_data):
-        """Compute A[i][j] = P(tag_j | tag_i)."""
+        """Compute transition_probs[i][j] = P(tag_j | tag_i)."""
         # Initialize count dictionaries
         self.transition_counts = {}
         self.tag_counts = {}
         
-        for tag in self.Q:
+        for tag in self.states:
             self.transition_counts[tag] = {}
             self.tag_counts[tag] = 0
-            for next_tag in self.Q:
+            for next_tag in self.states:
                 self.transition_counts[tag][next_tag] = 0
         
         # Count transitions and tags
@@ -125,33 +126,33 @@ class HiddenMarkovModel:
                 self.tag_counts[current_tag] += 1
         
         # Compute probabilities with smoothing
-        n_tags = len(self.Q)
-        self.A = np.zeros((n_tags, n_tags))
+        n_tags = len(self.states)
+        self.transition_probs = np.zeros((n_tags, n_tags))
         
         for i in range(n_tags):
-            tag_i = self.Q[i]
+            tag_i = self.states[i]
             total = self.tag_counts[tag_i]
             
             for j in range(n_tags):
-                tag_j = self.Q[j]
+                tag_j = self.states[j]
                 count = self.transition_counts[tag_i][tag_j]
-                self.A[i][j] = (count + self.smoothing) / (total + self.smoothing * n_tags)
+                self.transition_probs[i][j] = (count + self.smoothing) / (total + self.smoothing * n_tags)
 
             # Assertions for each row
-            assert np.isclose(np.sum(self.A[i, :]), 1.0), f"Row {i} of Transition matrix A does not sum to 1"
-            assert np.all(self.A[i, :] > 0), f"Row {i} has zero/negative probabilities (smoothing failed)"
-            assert np.all(self.A[i, :] <= 1.0), f"Row {i} has probabilities > 1.0"
+            assert np.isclose(np.sum(self.transition_probs[i, :]), 1.0), f"Row {i} of Transition matrix A does not sum to 1"
+            assert np.all(self.transition_probs[i, :] > 0), f"Row {i} has zero/negative probabilities (smoothing failed)"
+            assert np.all(self.transition_probs[i, :] <= 1.0), f"Row {i} has probabilities > 1.0"
     
     def _compute_emission_probabilities(self, train_data):
-        """Compute B[i][j] = P(word_j | tag_i)."""
+        """Compute emission_probs[i][j] = P(word_j | tag_i)."""
         # Initialize count dictionaries
         self.emission_counts = {}
         tag_total_counts = {}
         
-        for tag in self.Q:
+        for tag in self.states:
             self.emission_counts[tag] = {}
             tag_total_counts[tag] = 0
-            for word in self.V:
+            for word in self.vocabulary:
                 self.emission_counts[tag][word] = 0
         
         # Count emissions
@@ -161,28 +162,28 @@ class HiddenMarkovModel:
                 tag_total_counts[pos] += 1
         
         # Compute probabilities with smoothing
-        n_tags = len(self.Q)
-        n_words = len(self.V)
-        self.B = np.zeros((n_tags, n_words))
+        n_tags = len(self.states)
+        n_words = len(self.vocabulary)
+        self.emission_probs = np.zeros((n_tags, n_words))
         
-        for i in range(len(self.Q)):
-            tag = self.Q[i]
+        for i in range(len(self.states)):
+            tag = self.states[i]
             total = tag_total_counts[tag]
             
-            for j in range(len(self.V)):
-                word = self.V[j]
+            for j in range(len(self.vocabulary)):
+                word = self.vocabulary[j]
                 count = self.emission_counts[tag][word]
                 # Add-epsilon smoothing already normalizes
-                self.B[i][j] = (count + self.smoothing) / (total + self.smoothing * n_words)
+                self.emission_probs[i][j] = (count + self.smoothing) / (total + self.smoothing * n_words)
             
             # Assertions for each row
-            assert np.isclose(np.sum(self.B[i, :]), 1.0), f"Row {i} of Emission matrix B does not sum to 1"
-            assert np.all(self.B[i, :] > 0), f"Row {i} has zero/negative emission probabilities"
-            assert np.all(self.B[i, :] <= 1.0), f"Row {i} has emission probabilities > 1.0"
+            assert np.isclose(np.sum(self.emission_probs[i, :]), 1.0), f"Row {i} of Emission matrix B does not sum to 1"
+            assert np.all(self.emission_probs[i, :] > 0), f"Row {i} has zero/negative emission probabilities"
+            assert np.all(self.emission_probs[i, :] <= 1.0), f"Row {i} has emission probabilities > 1.0"
     
     def _compute_marginal_tag_probabilities(self, train_data):
         """Compute P(tag) = count(tag) / total_tokens for all tags."""
-        tag_counts = {tag: 0 for tag in self.Q}
+        tag_counts = {tag: 0 for tag in self.states}
         total_tokens = 0
         
         for sentence in train_data:
@@ -191,8 +192,11 @@ class HiddenMarkovModel:
                 total_tokens += 1
         
         # Compute marginal probabilities
-        for tag in self.Q:
+        for tag in self.states:
             self.tag_marginal_probs[tag] = tag_counts[tag] / total_tokens if total_tokens > 0 else 0
+        
+        # Assertions
+        assert np.isclose(sum(self.tag_marginal_probs.values()), 1.0), "Marginal tag probabilities do not sum to 1"
     
     def _compute_suffix_probabilities(self, train_data, suffix_length=3):
         """Compute emission probabilities based on word suffixes for unknown words."""
@@ -206,36 +210,41 @@ class HiddenMarkovModel:
                     self.suffix_tag_counts[suffix][tag] = self.suffix_tag_counts[suffix].get(tag, 0) + 1
         
         # Compute probabilities with smoothing
-        n_tags = len(self.Q)
+        n_tags = len(self.states)
         for suffix, tag_counts in self.suffix_tag_counts.items():
             total = sum(tag_counts.values())
             self.suffix_probs[suffix] = {}
             
-            for tag in self.Q:
+            for tag in self.states:
                 count = tag_counts.get(tag, 0)
                 self.suffix_probs[suffix][tag] = (count + self.smoothing) / (total + self.smoothing * n_tags)
+        
+        # Assertions
+        for suffix, probs in self.suffix_probs.items():
+            assert np.isclose(sum(probs.values()), 1.0), f"Suffix probabilities for '{suffix}' do not sum to 1"
     
-    def _get_unknown_word_emission(self, word, tag, suffix_length=3):
+    def _get_unknown_word_emission(self, word, tag):
         """Get emission probability for unknown word using suffix information."""
         if not self.use_suffix_model:
             # Basic uniform probability for unknown words
             return 1e-10
         
         # Try suffix-based probability
-        if len(word) > suffix_length:
-            suffix = word[-suffix_length:]
+        if len(word) > self.suffix_length:
+            suffix = word[-self.suffix_length:]
             if suffix in self.suffix_probs:
                 return self.suffix_probs[suffix].get(tag, 1e-10)
         
         # Fallback: use scaled marginal probabilities P(tag)
         # Unknown words get probabilities proportional to overall tag frequency
-        base_prob = self.tag_marginal_probs.get(tag, 1.0 / len(self.Q))
+        base_prob = self.tag_marginal_probs.get(tag, 1.0 / len(self.states))
+
         # Scale down but maintain relative proportions
         return base_prob * 1e-6
     
     def viterbi(self, sentence_words):
         """Viterbi algorithm: find most likely POS tag sequence for sentence."""
-        n_states = len(self.Q)
+        n_states = len(self.states)
         n_obs = len(sentence_words)
         
         # Initialize matrices
@@ -245,27 +254,27 @@ class HiddenMarkovModel:
         # Initialization (t=0)
         for s in range(n_states):
             word = sentence_words[0]
-            tag = self.Q[s]
+            tag = self.states[s]
             
             if word in self.word_to_idx:
                 word_idx = self.word_to_idx[word]
-                emission_prob = self.B[s][word_idx]
+                emission_prob = self.emission_probs[s][word_idx]
             else:
                 emission_prob = self._get_unknown_word_emission(word, tag)
             
-            viterbi_matrix[s][0] = self.pi[s] * emission_prob
+            viterbi_matrix[s][0] = self.initial_probs[s] * emission_prob
         
         # Recursion (t=1 to T-1)
         for t in range(1, n_obs):
             word = sentence_words[t]
             
             for s in range(n_states):
-                tag = self.Q[s]
+                tag = self.states[s]
                 
                 # Get emission probability for current state and word
                 if word in self.word_to_idx:
                     word_idx = self.word_to_idx[word]
-                    emission_prob = self.B[s][word_idx]
+                    emission_prob = self.emission_probs[s][word_idx]
                 else:
                     emission_prob = self._get_unknown_word_emission(word, tag)
                 
@@ -274,7 +283,7 @@ class HiddenMarkovModel:
                 max_state = 0
                 
                 for s_prev in range(n_states):
-                    prob = viterbi_matrix[s_prev][t-1] * self.A[s_prev][s]
+                    prob = viterbi_matrix[s_prev][t-1] * self.transition_probs[s_prev][s]
                     if prob > max_prob:
                         max_prob = prob
                         max_state = s_prev
@@ -332,15 +341,56 @@ class HiddenMarkovModel:
             'accuracy': accuracy
         }
     
+    def unknown_suffix_statistics(self, test_data):
+        """
+        Calculate statistics on how many unknown words have suffixes that are also unknown.
+        
+        Returns:
+            dict: Statistics including counts and percentages of unknown words with known/unknown suffixes
+        """
+        if not self.use_suffix_model:
+            print("Suffix model is not enabled.")
+            return None
+        
+        total_unknown_words = 0
+        unknown_suffix_count = 0
+        known_suffix_count = 0
+        too_short_count = 0
+        
+        for sentence in test_data:
+            for word, _ in sentence:
+                if word not in self.word_to_idx:
+                    total_unknown_words += 1
+                    if len(word) > self.suffix_length:
+                        suffix = word[-self.suffix_length:]
+                        if suffix in self.suffix_probs:
+                            known_suffix_count += 1
+                        else:
+                            unknown_suffix_count += 1
+                    else:
+                        too_short_count += 1
+        
+        stats = {
+            'total_unknown_words': total_unknown_words,
+            'known_suffix_count': known_suffix_count,
+            'unknown_suffix_count': unknown_suffix_count,
+            'too_short_count': too_short_count,
+            'known_suffix_percent': (known_suffix_count / total_unknown_words * 100) if total_unknown_words > 0 else 0.0,
+            'unknown_suffix_percent': (unknown_suffix_count / total_unknown_words * 100) if total_unknown_words > 0 else 0.0,
+            'too_short_percent': (too_short_count / total_unknown_words * 100) if total_unknown_words > 0 else 0.0
+        }
+        
+        return stats
+    
     def get_info(self):
         """Return HMM configuration details."""
         return {
-            'n_states': len(self.Q),
-            'n_words': len(self.V),
-            'states': self.Q,
+            'n_states': len(self.states),
+            'n_words': len(self.vocabulary),
+            'states': self.states,
             'smoothing': self.smoothing,
-            'transition_matrix_shape': self.A.shape,
-            'emission_matrix_shape': self.B.shape,
+            'transition_matrix_shape': self.transition_probs.shape,
+            'emission_matrix_shape': self.emission_probs.shape,
         }
     
     def save(self, filepath):

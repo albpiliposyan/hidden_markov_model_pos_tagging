@@ -27,14 +27,14 @@ def visualize_transition_graph(hmm, min_prob=0.05, figsize=(16, 12), save_path=N
     G = nx.DiGraph()
     
     # Add nodes (POS tags)
-    for tag in hmm.Q:
+    for tag in hmm.states:
         G.add_node(tag)
     
     # Add edges (transitions) with probabilities
     edge_labels = {}
-    for i, tag_i in enumerate(hmm.Q):
-        for j, tag_j in enumerate(hmm.Q):
-            prob = hmm.A[i][j]
+    for i, tag_i in enumerate(hmm.states):
+        for j, tag_j in enumerate(hmm.states):
+            prob = hmm.transition_probs[i][j]
             if prob > min_prob:  # Only show significant transitions
                 G.add_edge(tag_i, tag_j, weight=prob)
                 edge_labels[(tag_i, tag_j)] = f"{prob:.3f}"
@@ -47,7 +47,7 @@ def visualize_transition_graph(hmm, min_prob=0.05, figsize=(16, 12), save_path=N
     # Alternative: pos = nx.circular_layout(G)
     
     # Draw nodes
-    node_sizes = [hmm.pi[hmm.tag_to_idx[tag]] * 10000 for tag in G.nodes()]
+    node_sizes = [hmm.initial_probs[hmm.tag_to_idx[tag]] * 10000 for tag in G.nodes()]
     nx.draw_networkx_nodes(G, pos, node_size=node_sizes, 
                           node_color='lightblue', alpha=0.9,
                           edgecolors='black', linewidths=2)
@@ -85,11 +85,11 @@ def visualize_transition_graph(hmm, min_prob=0.05, figsize=(16, 12), save_path=N
 def visualize_transition_matrix(hmm, figsize=(14, 12), save_path=None):
     """Visualize transition probability matrix as a heatmap for all states."""
     # Use all tags
-    all_tags = hmm.Q
+    all_tags = hmm.states
     
     # Create heatmap
     plt.figure(figsize=figsize)
-    sns.heatmap(hmm.A, annot=True, fmt='.3f', cmap='YlOrRd',
+    sns.heatmap(hmm.transition_probs, annot=True, fmt='.3f', cmap='YlOrRd',
                 xticklabels=all_tags, yticklabels=all_tags,
                 cbar_kws={'label': 'Transition Probability'},
                 linewidths=0.5, linecolor='gray')
@@ -118,11 +118,11 @@ def visualize_emission_probabilities(hmm, tag='NOUN', top_n=20, figsize=(12, 6),
         save_path: Optional path to save the figure
     """
     if tag not in hmm.tag_to_idx:
-        print(f"Tag '{tag}' not found. Available tags: {hmm.Q}")
+        print(f"Tag '{tag}' not found. Available tags: {hmm.states}")
         return
     
     tag_idx = hmm.tag_to_idx[tag]
-    emission_probs = hmm.B[tag_idx]
+    emission_probs = hmm.emission_probs[tag_idx]
     
     # Get top N words
     top_indices = np.argsort(emission_probs)[::-1][:top_n]
@@ -163,9 +163,9 @@ def visualize_initial_probabilities(hmm, figsize=(12, 6), save_path=None):
         save_path: Optional path to save the figure
     """
     # Sort by probability
-    sorted_indices = np.argsort(hmm.pi)[::-1]
-    sorted_tags = [hmm.Q[i] for i in sorted_indices]
-    sorted_probs = hmm.pi[sorted_indices]
+    sorted_indices = np.argsort(hmm.initial_probs)[::-1]
+    sorted_tags = [hmm.states[i] for i in sorted_indices]
+    sorted_probs = hmm.initial_probs[sorted_indices]
     
     plt.figure(figsize=figsize)
     bars = plt.bar(range(len(sorted_tags)), sorted_probs, color='teal', alpha=0.7)
@@ -271,7 +271,7 @@ def visualize_confusion_matrix(hmm, test_data, figsize=(14, 12), save_path=None)
     from evaluation import compute_confusion_matrix
     
     confusion_matrix = compute_confusion_matrix(hmm, test_data)
-    all_tags = hmm.Q
+    all_tags = hmm.states
     
     # Normalize by row (true labels) to get percentages
     cm_normalized = confusion_matrix.astype('float') / confusion_matrix.sum(axis=1)[:, np.newaxis]
@@ -302,20 +302,22 @@ def visualize_model_comparison(models_dict, figsize=(12, 7), save_path=None):
     model_names = list(models_dict.keys())
     accuracies = [models_dict[name] * 100 for name in model_names]
     
-    colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6'][:len(model_names)]
-    bars = plt.bar(model_names, accuracies, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+    # Elegant, muted colors (not too bright)
+    colors = ['#5D6D7E', '#566573', '#4A5568', '#34495E', '#2C3E50', '#1C2833', '#17202A'][:len(model_names)]
+    bars = plt.bar(model_names, accuracies, color=colors, alpha=0.85, edgecolor='#2C3E50', linewidth=1.5)
     
     # Add value labels on top of bars
     for i, (bar, acc) in enumerate(zip(bars, accuracies)):
         height = bar.get_height()
         plt.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                f'{acc:.2f}%', ha='center', va='bottom', fontsize=12, fontweight='bold')
+                f'{acc:.2f}%', ha='center', va='bottom', fontsize=11, fontweight='bold')
     
     plt.ylabel('Accuracy (%)', fontsize=13, fontweight='bold')
     plt.xlabel('Model', fontsize=13, fontweight='bold')
     plt.title('HMM Model Comparison', fontsize=15, fontweight='bold', pad=20)
     plt.ylim(0, 100)
     plt.grid(axis='y', alpha=0.3, linestyle='--')
+    plt.xticks(rotation=15, ha='right')
     plt.tight_layout()
     
     if save_path:
@@ -340,7 +342,7 @@ def visualize_suffix_patterns(hmm, top_n=30, figsize=(14, 10), save_path=None):
     
     # Prepare data for heatmap
     suffixes = [s for s, _ in sorted_suffixes]
-    tags = sorted(hmm.Q)
+    tags = sorted(hmm.states)
     
     # Create matrix: rows=suffixes, cols=tags
     matrix = np.zeros((len(suffixes), len(tags)))
@@ -480,9 +482,9 @@ def compare_models_on_word_types(models_dict, test_data, figsize=(12, 6), save_p
     width = 0.35
     
     bars1 = ax.bar(x - width/2, known_accs, width, label='Known Words', 
-                   color='#2ecc71', alpha=0.8, edgecolor='black', linewidth=1.5)
+                   color='#5D6D7E', alpha=0.85, edgecolor='#2C3E50', linewidth=1.5)
     bars2 = ax.bar(x + width/2, unknown_accs, width, label='Unknown Words',
-                   color='#e74c3c', alpha=0.8, edgecolor='black', linewidth=1.5)
+                   color='#95A5A6', alpha=0.85, edgecolor='#2C3E50', linewidth=1.5)
     
     # Add value labels
     for bars in [bars1, bars2]:

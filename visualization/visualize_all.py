@@ -39,14 +39,27 @@ def main():
     basic_hmm.train(combined_train_data)
     basic_results = basic_hmm.evaluate(test_data)
     
-    print("  Training Suffix-Enhanced HMM...")
-    suffix_hmm = HiddenMarkovModel(use_suffix_model=True)
-    suffix_hmm.train(combined_train_data)
-    suffix_results = suffix_hmm.evaluate(test_data)
+    print("  Training Suffix-Enhanced HMM (n=2)...")
+    suffix_hmm_n2 = HiddenMarkovModel(use_suffix_model=True, suffix_length=2)
+    suffix_hmm_n2.train(combined_train_data)
+    suffix_results_n2 = suffix_hmm_n2.evaluate(test_data)
+    
+    print("  Training Suffix-Enhanced HMM (n=3)...")
+    suffix_hmm_n3 = HiddenMarkovModel(use_suffix_model=True, suffix_length=3)
+    suffix_hmm_n3.train(combined_train_data)
+    suffix_results_n3 = suffix_hmm_n3.evaluate(test_data)
+    
+    print("  Training Suffix-Enhanced HMM (n=4)...")
+    suffix_hmm_n4 = HiddenMarkovModel(use_suffix_model=True, suffix_length=4)
+    suffix_hmm_n4.train(combined_train_data)
+    suffix_results_n4 = suffix_hmm_n4.evaluate(test_data)
     
     # Note: Trigram model evaluation is very slow, using pre-computed accuracy
     print("  Using pre-computed Trigram HMM accuracy (68.24%)...")
     trigram_accuracy = 0.6824
+    
+    # Use the best suffix model for detailed visualizations
+    suffix_hmm = suffix_hmm_n3
     
     # Create output directory
     output_dir = 'visualizations'
@@ -55,11 +68,13 @@ def main():
     # Generate new visualizations
     print("\n[3] Generating New Visualizations...")
     
-    # Model comparison
+    # Model comparison with different suffix lengths
     print("\n  Creating model comparison chart...")
     models_dict = {
-        'Basic HMM': basic_results['accuracy'],
-        'Suffix-Enhanced HMM': suffix_results['accuracy'],
+        'Classical HMM': basic_results['accuracy'],
+        'Suffix n=2': suffix_results_n2['accuracy'],
+        'Suffix n=3': suffix_results_n3['accuracy'],
+        'Suffix n=4': suffix_results_n4['accuracy'],
         'Trigram HMM': trigram_accuracy
     }
     visualize_model_comparison(models_dict, 
@@ -81,8 +96,10 @@ def main():
     # Compare models on known vs unknown words
     print("  Creating model comparison on word types...")
     models_for_comparison = {
-        'Basic HMM': basic_hmm,
-        'Suffix-Enhanced HMM': suffix_hmm
+        'Classical HMM': basic_hmm,
+        'Suffix n=2': suffix_hmm_n2,
+        'Suffix n=3': suffix_hmm_n3,
+        'Suffix n=4': suffix_hmm_n4
     }
     compare_results = compare_models_on_word_types(models_for_comparison, test_data,
                                                    save_path=f'{output_dir}/models_word_types_comparison.png')

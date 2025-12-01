@@ -19,7 +19,7 @@ def evaluate_and_report(hmm, test_data, dataset_name="Test"):
 
 def compute_confusion_matrix(hmm, test_data):
     """Compute confusion matrix for POS tagging."""
-    n_tags = len(hmm.Q)
+    n_tags = len(hmm.states)
     confusion_matrix = np.zeros((n_tags, n_tags), dtype=int)
     
     for sentence in test_data:
@@ -139,7 +139,7 @@ def print_hmm_summary(hmm):
     
     # Top initial probabilities
     print(f"\nTop 5 Initial Probabilities (π):")
-    top_initial = sorted(enumerate(hmm.pi), key=lambda x: x[1], reverse=True)[:5]
+    top_initial = sorted(enumerate(hmm.initial_probs), key=lambda x: x[1], reverse=True)[:5]
     for idx, prob in top_initial:
         print(f"  {hmm.idx_to_tag[idx]:10s}: {prob:.4f}")
     
@@ -148,13 +148,13 @@ def print_hmm_summary(hmm):
         noun_idx = hmm.tag_to_idx['NOUN']
         verb_idx = hmm.tag_to_idx['VERB']
         print(f"\nSample Transition Probabilities:")
-        print(f"  P(VERB | NOUN) = {hmm.A[noun_idx][verb_idx]:.4f}")
-        print(f"  P(NOUN | VERB) = {hmm.A[verb_idx][noun_idx]:.4f}")
+        print(f"  P(VERB | NOUN) = {hmm.transition_probs[noun_idx][verb_idx]:.4f}")
+        print(f"  P(NOUN | VERB) = {hmm.transition_probs[verb_idx][noun_idx]:.4f}")
     
     # Top emissions for a sample tag
     if 'NOUN' in hmm.tag_to_idx:
         noun_idx = hmm.tag_to_idx['NOUN']
-        top_emissions = sorted(enumerate(hmm.B[noun_idx]), key=lambda x: x[1], reverse=True)[:5]
+        top_emissions = sorted(enumerate(hmm.emission_probs[noun_idx]), key=lambda x: x[1], reverse=True)[:5]
         print(f"\nTop 5 words emitted by NOUN:")
         for word_idx, prob in top_emissions:
             print(f"  '{hmm.idx_to_word[word_idx]}': {prob:.4f}")
