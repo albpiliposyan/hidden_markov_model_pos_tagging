@@ -7,11 +7,13 @@ import sys
 class HiddenMarkovModel:
     """HMM for POS tagging using Maximum Likelihood Estimation."""
     
-    def __init__(self, use_suffix_model=True, suffix_length=3):
+    def __init__(self, use_suffix_model=True, suffix_length=3, use_prefix_model=False, prefix_length=2):
         """Initialize HMM with default smoothing (1e-10)."""
         self.smoothing = 1e-10
         self.use_suffix_model = use_suffix_model
         self.suffix_length = suffix_length  # Length of suffix for unknown word handling
+        self.use_prefix_model = use_prefix_model
+        self.prefix_length = prefix_length  # Length of prefix for unknown word handling
         self.states = None  # States (POS tags)
         self.vocabulary = None  # Vocabulary (list of unique words)
         self.transition_probs = None  # Transition probabilities: P(tag_j | tag_i)
@@ -34,6 +36,10 @@ class HiddenMarkovModel:
         self.suffix_tag_counts = {}  # suffix -> {tag: count}
         self.suffix_probs = {}  # suffix -> {tag: probability}: P(tag | suffix)
         
+        # Prefix-based emission for unknown words
+        self.prefix_tag_counts = {}  # prefix -> {tag: count}
+        self.prefix_probs = {}  # prefix -> {tag: probability}: P(tag | prefix)
+        
         # Marginal tag probabilities P(tag)
         self.tag_marginal_probs = {}  # tag -> P(tag) overall frequency
         
@@ -53,11 +59,16 @@ class HiddenMarkovModel:
         if self.use_suffix_model:
             self._compute_suffix_probabilities(train_data, suffix_length=self.suffix_length)  # Suffix model
         
+        if self.use_prefix_model:
+            self._compute_prefix_probabilities(train_data, prefix_length=self.prefix_length)  # Prefix model
+        
         print(f"Training complete!")
         print(f"  States (POS tags): {len(self.states)}")
         print(f"  Vocabulary size: {len(self.vocabulary)}")
         if self.use_suffix_model:
             print(f"  Suffix patterns: {len(self.suffix_tag_counts)}")
+        if self.use_prefix_model:
+            print(f"  Prefix patterns: {len(self.prefix_tag_counts)}")
         
     def _build_vocabulary_and_tagset(self, train_data):
         """Extract unique words and POS tags."""
@@ -223,22 +234,64 @@ class HiddenMarkovModel:
         for suffix, probs in self.suffix_probs.items():
             assert np.isclose(sum(probs.values()), 1.0), f"Suffix probabilities for '{suffix}' do not sum to 1"
     
+    def _compute_prefix_probabilities(self, train_data, prefix_length=3):
+        """Compute emission probabilities based on word prefixes for unknown words."""
+        # Count prefix-tag co-occurrences
+        for sentence in train_data:
+            for word, tag in sentence:
+                if len(word) > prefix_length:
+                    prefix = word[:prefix_length]
+                    if prefix not in self.prefix_tag_counts:
+                        self.prefix_tag_counts[prefix] = {}
+                    self.prefix_tag_counts[prefix][tag] = self.prefix_tag_counts[prefix].get(tag, 0) + 1
+        
+        # Compute probabilities with smoothing
+        n_tags = len(self.states)
+        for prefix, tag_counts in self.prefix_tag_counts.items():
+            total = sum(tag_counts.values())
+            self.prefix_probs[prefix] = {}
+            
+            for tag in self.states:
+                count = tag_counts.get(tag, 0)
+                self.prefix_probs[prefix][tag] = (count + self.smoothing) / (total + self.smoothing * n_tags)
+        
+        # Assertions
+        for prefix, probs in self.prefix_probs.items():
+            assert np.isclose(sum(probs.values()), 1.0), f"Prefix probabilities for '{prefix}' do not sum to 1"
+    
     def _get_unknown_word_emission(self, word, tag):
-        """Get emission probability for unknown word using suffix information."""
-        if not self.use_suffix_model:
-            # Basic uniform probability for unknown words
-            return 1e-10
+        """Get emission probability for unknown word using prefix and/or suffix information."""
+        probabilities = []
         
         # Try suffix-based probability
-        if len(word) > self.suffix_length:
+        if self.use_suffix_model and len(word) > self.suffix_length:
             suffix = word[-self.suffix_length:]
             if suffix in self.suffix_probs:
-                return self.suffix_probs[suffix].get(tag, 1e-10)
+                probabilities.append(self.suffix_probs[suffix].get(tag, 1e-10))
+            else:
+                # Try lowercase suffix if original not found
+                suffix_lower = word[-self.suffix_length:].lower()
+                if suffix_lower in self.suffix_probs:
+                    probabilities.append(self.suffix_probs[suffix_lower].get(tag, 1e-10))
+        
+        # Try prefix-based probability
+        if self.use_prefix_model and len(word) > self.prefix_length:
+            prefix = word[:self.prefix_length]
+            if prefix in self.prefix_probs:
+                probabilities.append(self.prefix_probs[prefix].get(tag, 1e-10))
+            else:
+                # Try lowercase prefix if original not found
+                prefix_lower = word[:self.prefix_length].lower()
+                if prefix_lower in self.prefix_probs:
+                    probabilities.append(self.prefix_probs[prefix_lower].get(tag, 1e-10))
+        
+        # If we have prefix and/or suffix probabilities, average them
+        if probabilities:
+            return np.mean(probabilities)
         
         # Fallback: use scaled marginal probabilities P(tag)
         # Unknown words get probabilities proportional to overall tag frequency
         base_prob = self.tag_marginal_probs.get(tag, 1.0 / len(self.states))
-
         # Scale down but maintain relative proportions
         return base_prob * 1e-6
     
@@ -256,8 +309,18 @@ class HiddenMarkovModel:
             word = sentence_words[0]
             tag = self.states[s]
             
+            # Try to find word in vocabulary (case-insensitive)
+            word_idx = None
             if word in self.word_to_idx:
                 word_idx = self.word_to_idx[word]
+            elif word.lower() in self.word_to_idx:
+                # Try lowercase version
+                word_idx = self.word_to_idx[word.lower()]
+            elif word.capitalize() in self.word_to_idx:
+                # Try capitalized version (for words at sentence start)
+                word_idx = self.word_to_idx[word.capitalize()]
+            
+            if word_idx is not None:
                 emission_prob = self.emission_probs[s][word_idx]
             else:
                 emission_prob = self._get_unknown_word_emission(word, tag)
@@ -271,9 +334,18 @@ class HiddenMarkovModel:
             for s in range(n_states):
                 tag = self.states[s]
                 
-                # Get emission probability for current state and word
+                # Try to find word in vocabulary (case-insensitive)
+                word_idx = None
                 if word in self.word_to_idx:
                     word_idx = self.word_to_idx[word]
+                elif word.lower() in self.word_to_idx:
+                    # Try lowercase version
+                    word_idx = self.word_to_idx[word.lower()]
+                elif word.capitalize() in self.word_to_idx:
+                    # Try capitalized version
+                    word_idx = self.word_to_idx[word.capitalize()]
+                
+                if word_idx is not None:
                     emission_prob = self.emission_probs[s][word_idx]
                 else:
                     emission_prob = self._get_unknown_word_emission(word, tag)

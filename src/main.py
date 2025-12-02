@@ -49,7 +49,8 @@ def main(config_path='config.cfg'):
     
     # Train HMM on combined data
     print("\n[2] Training HMM on Combined Data...")
-    hmm = HiddenMarkovModel()
+    # Use best configuration: Prefix+Suffix (pref=2, suff=3) - achieves ~90% accuracy
+    hmm = HiddenMarkovModel(use_suffix_model=True, suffix_length=3, use_prefix_model=True, prefix_length=2)
     hmm.train(combined_train_data)
     
     if output_cfg['print_hmm_summary']:
