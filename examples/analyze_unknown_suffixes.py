@@ -17,9 +17,7 @@ def main():
     print("\nLoading data...")
     train_data, dev_data, test_data = load_armenian_dataset()
     
-    combined_train_data = train_data + dev_data
-    
-    print(f"Training sentences: {len(combined_train_data)}")
+    print(f"Training sentences: {len(train_data)}")
     print(f"Test sentences: {len(test_data)}")
     
     # Test different suffix lengths
@@ -33,7 +31,7 @@ def main():
         # Train model
         print(f"\nTraining Suffix-Enhanced HMM (n={n})...")
         hmm = HiddenMarkovModel(use_suffix_model=True, suffix_length=n)
-        hmm.train(combined_train_data)
+        hmm.train(train_data)
         
         # Get suffix statistics
         print(f"\nAnalyzing unknown words in test set...")
@@ -41,6 +39,7 @@ def main():
         
         if stats:
             print(f"\nUnknown Word Suffix Statistics:")
+            print(f"  Total words: {stats['total_words']}")
             print(f"  Total unknown words: {stats['total_unknown_words']}")
             print(f"  Words with KNOWN suffixes: {stats['known_suffix_count']} ({stats['known_suffix_percent']:.2f}%)")
             print(f"  Words with UNKNOWN suffixes: {stats['unknown_suffix_count']} ({stats['unknown_suffix_percent']:.2f}%)")

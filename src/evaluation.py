@@ -1,12 +1,11 @@
 """Evaluation utilities for HMM POS tagging."""
 
 import numpy as np
-from collections import defaultdict, Counter
 
 
-def evaluate_and_report(hmm, test_data, dataset_name="Test"):
+def evaluate_and_report(hmm, test_data, dataset_name="Test", method="viterbi"):
     """Evaluate HMM and print detailed report."""
-    results = hmm.evaluate(test_data)
+    results = hmm.evaluate(test_data, method=method)
     
     print(f"\n{dataset_name} Set Results:")
     print(f"  Total tokens: {results['total_tokens']}")
@@ -121,7 +120,7 @@ def print_sample_predictions(hmm, test_data, n_samples=1, max_tokens=15):
                 break
 
 
-def print_hmm_summary(hmm):
+def print_hmm_summary(hmm, verbose=False):
     """Print summary of trained HMM."""
     print(f"\n{'='*70}")
     print("HMM SUMMARY")
@@ -131,33 +130,33 @@ def print_hmm_summary(hmm):
     print(f"\nModel Configuration:")
     print(f"  Number of states (POS tags): {info['n_states']}")
     print(f"  Vocabulary size: {info['n_words']}")
-    print(f"  Smoothing parameter: {info['smoothing']}")
     print(f"  Transition matrix shape: {info['transition_matrix_shape']}")
     print(f"  Emission matrix shape: {info['emission_matrix_shape']}")
     
     print(f"\nPOS Tags: {info['states']}")
     
-    # Top initial probabilities
-    print(f"\nTop 5 Initial Probabilities (π):")
-    top_initial = sorted(enumerate(hmm.initial_probs), key=lambda x: x[1], reverse=True)[:5]
-    for idx, prob in top_initial:
-        print(f"  {hmm.idx_to_tag[idx]:10s}: {prob:.4f}")
+    if verbose:
+        # Top initial probabilities
+        print(f"\nTop 5 Initial Probabilities:")
+        top_initial = sorted(enumerate(hmm.initial_probs), key=lambda x: x[1], reverse=True)[:5]
+        for idx, prob in top_initial:
+            print(f"  {hmm.idx_to_tag[idx]:10s}: {prob:.4f}")
     
-    # Sample transitions
-    if 'NOUN' in hmm.tag_to_idx and 'VERB' in hmm.tag_to_idx:
-        noun_idx = hmm.tag_to_idx['NOUN']
-        verb_idx = hmm.tag_to_idx['VERB']
-        print(f"\nSample Transition Probabilities:")
-        print(f"  P(VERB | NOUN) = {hmm.transition_probs[noun_idx][verb_idx]:.4f}")
-        print(f"  P(NOUN | VERB) = {hmm.transition_probs[verb_idx][noun_idx]:.4f}")
+        # Sample transitions
+        if 'NOUN' in hmm.tag_to_idx and 'VERB' in hmm.tag_to_idx:
+            noun_idx = hmm.tag_to_idx['NOUN']
+            verb_idx = hmm.tag_to_idx['VERB']
+            print(f"\nSample Transition Probabilities:")
+            print(f"  P(VERB | NOUN) = {hmm.transition_probs[noun_idx][verb_idx]:.4f}")
+            print(f"  P(NOUN | VERB) = {hmm.transition_probs[verb_idx][noun_idx]:.4f}")
     
-    # Top emissions for a sample tag
-    if 'NOUN' in hmm.tag_to_idx:
-        noun_idx = hmm.tag_to_idx['NOUN']
-        top_emissions = sorted(enumerate(hmm.emission_probs[noun_idx]), key=lambda x: x[1], reverse=True)[:5]
-        print(f"\nTop 5 words emitted by NOUN:")
-        for word_idx, prob in top_emissions:
-            print(f"  '{hmm.idx_to_word[word_idx]}': {prob:.4f}")
+        # Top emissions for a sample tag
+        if 'NOUN' in hmm.tag_to_idx:
+            noun_idx = hmm.tag_to_idx['NOUN']
+            top_emissions = sorted(enumerate(hmm.emission_probs[noun_idx]), key=lambda x: x[1], reverse=True)[:5]
+            print(f"\nTop 5 words emitted by NOUN:")
+            for word_idx, prob in top_emissions:
+                print(f"  '{hmm.idx_to_word[word_idx]}': {prob:.4f}")
     
     print(f"\n{'='*70}")
 

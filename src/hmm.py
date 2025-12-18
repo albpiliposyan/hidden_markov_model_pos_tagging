@@ -51,10 +51,10 @@ class HiddenMarkovModel:
         self._build_vocabulary_and_tagset(train_data)
         
         # Compute probabilities
-        self._compute_initial_probabilities(train_data)     # Pi
-        self._compute_transition_probabilities(train_data)  # A
-        self._compute_emission_probabilities(train_data)    # B
-        self._compute_marginal_tag_probabilities(train_data)  # P(tag)
+        self._compute_initial_probabilities(train_data)     # initial_probs
+        self._compute_transition_probabilities(train_data)  # transition_probs
+        self._compute_emission_probabilities(train_data)    # emission_probs
+        self._compute_marginal_tag_probabilities(train_data)  # tag_marginal_probs
         
         if self.use_suffix_model:
             self._compute_suffix_probabilities(train_data, suffix_length=self.suffix_length)  # Suffix model
@@ -198,7 +198,7 @@ class HiddenMarkovModel:
         total_tokens = 0
         
         for sentence in train_data:
-            for _, tag in sentence:
+            for word, tag in sentence:
                 tag_counts[tag] += 1
                 total_tokens += 1
         
@@ -211,7 +211,6 @@ class HiddenMarkovModel:
     
     def _compute_suffix_probabilities(self, train_data, suffix_length=3):
         """Compute emission probabilities based on word suffixes for unknown words."""
-        # Count suffix-tag co-occurrences
         for sentence in train_data:
             for word, tag in sentence:
                 if len(word) > suffix_length:
@@ -236,7 +235,6 @@ class HiddenMarkovModel:
     
     def _compute_prefix_probabilities(self, train_data, prefix_length=3):
         """Compute emission probabilities based on word prefixes for unknown words."""
-        # Count prefix-tag co-occurrences
         for sentence in train_data:
             for word, tag in sentence:
                 if len(word) > prefix_length:
@@ -268,22 +266,12 @@ class HiddenMarkovModel:
             suffix = word[-self.suffix_length:]
             if suffix in self.suffix_probs:
                 probabilities.append(self.suffix_probs[suffix].get(tag, 1e-10))
-            else:
-                # Try lowercase suffix if original not found
-                suffix_lower = word[-self.suffix_length:].lower()
-                if suffix_lower in self.suffix_probs:
-                    probabilities.append(self.suffix_probs[suffix_lower].get(tag, 1e-10))
         
         # Try prefix-based probability
         if self.use_prefix_model and len(word) > self.prefix_length:
             prefix = word[:self.prefix_length]
             if prefix in self.prefix_probs:
                 probabilities.append(self.prefix_probs[prefix].get(tag, 1e-10))
-            else:
-                # Try lowercase prefix if original not found
-                prefix_lower = word[:self.prefix_length].lower()
-                if prefix_lower in self.prefix_probs:
-                    probabilities.append(self.prefix_probs[prefix_lower].get(tag, 1e-10))
         
         # If we have prefix and/or suffix probabilities, average them
         if probabilities:
@@ -306,22 +294,12 @@ class HiddenMarkovModel:
         
         # Initialization (t=0)
         for s in range(n_states):
-            word = sentence_words[0]
+            word = sentence_words[0].lower()  # Convert to eeowercase
+            # word = sentence_words[0]
             tag = self.states[s]
             
-            # Try to find word in vocabulary (case-insensitive)
-            word_idx = None
             if word in self.word_to_idx:
-                word_idx = self.word_to_idx[word]
-            elif word.lower() in self.word_to_idx:
-                # Try lowercase version
-                word_idx = self.word_to_idx[word.lower()]
-            elif word.capitalize() in self.word_to_idx:
-                # Try capitalized version (for words at sentence start)
-                word_idx = self.word_to_idx[word.capitalize()]
-            
-            if word_idx is not None:
-                emission_prob = self.emission_probs[s][word_idx]
+                emission_prob = self.emission_probs[s][self.word_to_idx[word]]
             else:
                 emission_prob = self._get_unknown_word_emission(word, tag)
             
@@ -329,24 +307,14 @@ class HiddenMarkovModel:
         
         # Recursion (t=1 to T-1)
         for t in range(1, n_obs):
-            word = sentence_words[t]
+            word = sentence_words[t].lower()  # Convert to lowercase
+            # word = sentence_words[t]
             
             for s in range(n_states):
                 tag = self.states[s]
                 
-                # Try to find word in vocabulary (case-insensitive)
-                word_idx = None
                 if word in self.word_to_idx:
-                    word_idx = self.word_to_idx[word]
-                elif word.lower() in self.word_to_idx:
-                    # Try lowercase version
-                    word_idx = self.word_to_idx[word.lower()]
-                elif word.capitalize() in self.word_to_idx:
-                    # Try capitalized version
-                    word_idx = self.word_to_idx[word.capitalize()]
-                
-                if word_idx is not None:
-                    emission_prob = self.emission_probs[s][word_idx]
+                    emission_prob = self.emission_probs[s][self.word_to_idx[word]]
                 else:
                     emission_prob = self._get_unknown_word_emission(word, tag)
                 
@@ -384,11 +352,112 @@ class HiddenMarkovModel:
         
         return predicted_tags
     
-    def predict(self, sentence_words):
-        """Alias for viterbi."""
-        return self.viterbi(sentence_words)
+    def forward(self, sentence_words):
+        """Forward algorithm: compute alpha[s][t] = P(obs_1:t, state_t=s)."""
+        n_states = len(self.states)
+        n_obs = len(sentence_words)
+        alpha = np.zeros((n_states, n_obs))
+        
+        # Initialization (t=0)
+        for s in range(n_states):
+            word = sentence_words[0].lower()
+            # word = sentence_words[0]
+            tag = self.states[s]
+            
+            if word in self.word_to_idx:
+                emission_prob = self.emission_probs[s][self.word_to_idx[word]]
+            else:
+                emission_prob = self._get_unknown_word_emission(word, tag)
+            
+            alpha[s][0] = self.initial_probs[s] * emission_prob
+        
+        # Recursion (t=1 to T-1)
+        for t in range(1, n_obs):
+            word = sentence_words[t].lower()
+            # word = sentence_words[t]
+            
+            for s in range(n_states):
+                tag = self.states[s]
+                
+                if word in self.word_to_idx:
+                    emission_prob = self.emission_probs[s][self.word_to_idx[word]]
+                else:
+                    emission_prob = self._get_unknown_word_emission(word, tag)
+                
+                alpha[s][t] = emission_prob * np.sum(
+                    alpha[:, t-1] * self.transition_probs[:, s]
+                )
+        
+        return alpha
     
-    def evaluate(self, test_data):
+    def backward(self, sentence_words):
+        """Backward algorithm: compute beta[s][t] = P(obs_t+1:T | state_t=s)."""
+        n_states = len(self.states)
+        n_obs = len(sentence_words)
+        beta = np.zeros((n_states, n_obs))
+        
+        # Initialization (t=T-1)
+        beta[:, n_obs-1] = 1.0
+        
+        # Recursion (t=T-2 to 0)
+        for t in range(n_obs-2, -1, -1):
+            word_next = sentence_words[t+1].lower()
+            # word_next = sentence_words[t+1]
+            
+            for s in range(n_states):
+                beta_sum = 0.0
+                for s_next in range(n_states):
+                    tag_next = self.states[s_next]
+                    
+                    if word_next in self.word_to_idx:
+                        emission_prob = self.emission_probs[s_next][self.word_to_idx[word_next]]
+                    else:
+                        emission_prob = self._get_unknown_word_emission(word_next, tag_next)
+                    
+                    beta_sum += (self.transition_probs[s][s_next] * 
+                                emission_prob * 
+                                beta[s_next][t+1])
+                
+                beta[s][t] = beta_sum
+        
+        return beta
+    
+    def posterior_decode(self, sentence_words):
+        """Posterior decoding: find most likely tag at each position using forward-backward."""
+        n_states = len(self.states)
+        n_obs = len(sentence_words)
+        
+        # Compute forward and backward probabilities
+        alpha = self.forward(sentence_words)
+        beta = self.backward(sentence_words)
+        
+        # Compute posterior probabilities gamma[s][t] = P(state_t=s | observations)
+        gamma = np.zeros((n_states, n_obs))
+        
+        for t in range(n_obs):
+            denominator = np.sum(alpha[:, t] * beta[:, t])
+            
+            if denominator > 0:
+                gamma[:, t] = (alpha[:, t] * beta[:, t]) / denominator
+            else:
+                gamma[:, t] = 1.0 / n_states
+        
+        # Select most likely state at each time step
+        best_path = np.argmax(gamma, axis=0)
+        predicted_tags = [self.idx_to_tag[state] for state in best_path]
+        
+        return predicted_tags
+    
+    def predict(self, sentence_words, method='viterbi'):
+        """Predict POS tags using viterbi or posterior decoding."""
+        if method == 'viterbi':
+            return self.viterbi(sentence_words)
+        elif method == 'posterior':
+            return self.posterior_decode(sentence_words)
+        else:
+            raise ValueError(f"Unknown method: {method}. Use 'viterbi' or 'posterior'")
+    
+    def evaluate(self, test_data, method='viterbi'):
         """Evaluate HMM accuracy on test data."""
         total_tokens = 0
         correct_predictions = 0
@@ -397,7 +466,7 @@ class HiddenMarkovModel:
             words = [word for word, pos in sentence]
             true_tags = [pos for word, pos in sentence]
             
-            predicted_tags = self.predict(words)
+            predicted_tags = self.predict(words, method=method)
             
             for true_tag, pred_tag in zip(true_tags, predicted_tags):
                 total_tokens += 1
@@ -414,16 +483,12 @@ class HiddenMarkovModel:
         }
     
     def unknown_suffix_statistics(self, test_data):
-        """
-        Calculate statistics on how many unknown words have suffixes that are also unknown.
-        
-        Returns:
-            dict: Statistics including counts and percentages of unknown words with known/unknown suffixes
-        """
+        """Calculate statistics on unknown words and their suffix patterns."""
         if not self.use_suffix_model:
             print("Suffix model is not enabled.")
             return None
         
+        total_words = 0
         total_unknown_words = 0
         unknown_suffix_count = 0
         known_suffix_count = 0
@@ -431,6 +496,7 @@ class HiddenMarkovModel:
         
         for sentence in test_data:
             for word, _ in sentence:
+                total_words += 1
                 if word not in self.word_to_idx:
                     total_unknown_words += 1
                     if len(word) > self.suffix_length:
@@ -443,6 +509,7 @@ class HiddenMarkovModel:
                         too_short_count += 1
         
         stats = {
+            'total_words': total_words,
             'total_unknown_words': total_unknown_words,
             'known_suffix_count': known_suffix_count,
             'unknown_suffix_count': unknown_suffix_count,

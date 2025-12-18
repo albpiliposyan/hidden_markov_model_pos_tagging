@@ -1,4 +1,4 @@
-"""Generate all visualizations for HMM project."""
+"""Generate all HMM POS tagging visualizations."""
 
 import os
 import sys
@@ -7,339 +7,411 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib.patches import FancyBboxPatch, Patch
+import networkx as nx
 from hmm import HiddenMarkovModel
 from hmm_trigram import TrigramHMM
 from data_utils import load_armenian_dataset
+from evaluation import compute_confusion_matrix
 from visualization import (
-    visualize_model_comparison,
-    visualize_suffix_patterns,
-    visualize_unknown_word_performance,
-    compare_models_on_word_types,
-    create_all_visualizations
+    visualize_transition_graph,
+    visualize_transition_matrix,
+    visualize_confusion_matrix,
+    visualize_initial_probabilities,
+    visualize_marginal_probabilities,
+    visualize_viterbi_path,
+    visualize_suffix_patterns
 )
 
 
-def train_and_evaluate(train_data, test_data, model_name, **kwargs):
-    """Train and evaluate a single HMM configuration."""
-    print(f"  Training: {model_name}...")
-    
-    hmm = HiddenMarkovModel(**kwargs)
-    hmm.train(train_data)
-    
-    results = hmm.evaluate(test_data)
-    accuracy = results['accuracy'] * 100
-    
-    print(f"    Accuracy: {accuracy:.2f}%")
-    
-    return hmm, accuracy
+# Config
+OUTPUT_DIR = 'visualizations'
+PALETTE = {
+    'primary': '#1f77b4', 'secondary': '#ff7f0e', 'accent1': '#2ca02c',
+    'accent2': '#d62728', 'accent3': '#9467bd', 'neutral': '#7f7f7f', 'dark': '#000000',
+}
+MODEL_COLORS = {
+    'classical': PALETTE['neutral'], 'suffix': PALETTE['primary'],
+    'prefix': PALETTE['secondary'], 'prefix_suffix': PALETTE['accent1'],
+}
 
 
-def create_comprehensive_comparison_chart(results, output_dir):
-    """Create bar chart comparing all model accuracies."""
-    # Set style
-    sns.set_style("whitegrid")
-    plt.figure(figsize=(16, 8))
-    
-    # Prepare data
-    names = list(results.keys())
-    accuracies = list(results.values())
-    
-    # Define colors for different model types
-    colors = []
-    for name in names:
-        if 'Classical' in name:
-            colors.append('#d62728')  # Red for classical
-        elif 'Prefix+Suffix' in name:
-            colors.append('#2ca02c')  # Green for prefix+suffix
-        elif 'Suffix-only' in name:
-            colors.append('#1f77b4')  # Blue for suffix-only
-        elif 'Prefix-only' in name:
-            colors.append('#ff7f0e')  # Orange for prefix-only
-        else:
-            colors.append('#7f7f7f')  # Gray for others
-    
-    # Create bar chart
-    bars = plt.bar(range(len(names)), accuracies, color=colors, edgecolor='black', linewidth=1.2)
-    
-    # Add value labels on top of bars
-    for i, (bar, acc) in enumerate(zip(bars, accuracies)):
-        height = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                f'{acc:.2f}%',
-                ha='center', va='bottom', fontsize=9, fontweight='bold')
-    
-    # Customize plot
-    plt.xlabel('Model Configuration', fontsize=12, fontweight='bold')
-    plt.ylabel('Accuracy (%)', fontsize=12, fontweight='bold')
-    plt.title('HMM POS Tagging: Comparison of Different Model Configurations', 
-              fontsize=14, fontweight='bold', pad=20)
-    plt.xticks(range(len(names)), names, rotation=45, ha='right', fontsize=10)
-    plt.ylim([min(accuracies) - 2, max(accuracies) + 2])
-    plt.grid(axis='y', alpha=0.3)
-    
-    # Add legend
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor='#d62728', edgecolor='black', label='Classical HMM'),
-        Patch(facecolor='#1f77b4', edgecolor='black', label='Suffix-only'),
-        Patch(facecolor='#ff7f0e', edgecolor='black', label='Prefix-only'),
-        Patch(facecolor='#2ca02c', edgecolor='black', label='Prefix+Suffix')
+# Model configs
+def get_configs():
+    return [
+        {'name': 'I-կարգի ԹՄՄ', 'params': {'use_suffix_model': False, 'use_prefix_model': False}},
+        {'name': 'II-կարգի ԹՄՄ', 'params': {'model_type': 'trigram'}},
+        {'name': 'Վերջ-2', 'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': False}},
+        {'name': 'Վերջ-3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': False}},
+        {'name': 'Նախ-2', 'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 2}},
+        {'name': 'Նախ-3', 'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 3}},
+        {'name': 'Ն3+Վ2', 'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': True, 'prefix_length': 3}},
+        {'name': 'Ն2+Վ3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': True, 'prefix_length': 2}},
+        {'name': 'Ն3+Վ3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': True, 'prefix_length': 3}},
     ]
-    plt.legend(handles=legend_elements, loc='upper left', fontsize=10)
+
+
+def get_model_color(name):
+    if 'II-կարգի ԹՄՄ' in name: return PALETTE['accent3']
+    if 'I-կարգի ԹՄՄ' in name: return MODEL_COLORS['classical']
+    if '+' in name: return MODEL_COLORS['prefix_suffix']
+    if 'Վերջ' in name: return MODEL_COLORS['suffix']
+    if 'Նախ' in name: return MODEL_COLORS['prefix']
+    return PALETTE['neutral']
+
+
+def get_selected_models():
+    return ['I-կարգի ԹՄՄ', 'Նախ-2', 'Նախ-3', 'Վերջ-3', 'Ն3+Վ3', 'Ն2+Վ3']
+
+
+# Train and evaluate
+def train_model(train_data, dev_data, test_data, name, **params):
+    print(f"  {name}...", end=' ')
     
+    if params.pop('model_type', None) == 'trigram':
+        model = TrigramHMM()
+    else:
+        model = HiddenMarkovModel(**params)
+    
+    model.train(train_data)
+    dev_acc = model.evaluate(dev_data)['accuracy'] * 100
+    test_acc = model.evaluate(test_data)['accuracy'] * 100
+    print(f"Dev: {dev_acc:.2f}%, Test: {test_acc:.2f}%")
+    
+    return model, dev_acc, test_acc
+
+
+# Utilities
+def calculate_word_type_accuracy(model, test_data):
+    """Calculate accuracy for known vs unknown words."""
+    vocab = set(model.word_to_idx.keys())
+    known_c = known_t = unk_c = unk_t = 0
+    
+    for sent in test_data:
+        words = [w for w, _ in sent]
+        true_tags = [t for _, t in sent]
+        pred_tags = model.predict(words)
+        
+        for w, true_t, pred_t in zip(words, true_tags, pred_tags):
+            if w.lower() in vocab:
+                known_t += 1
+                if true_t == pred_t: known_c += 1
+            else:
+                unk_t += 1
+                if true_t == pred_t: unk_c += 1
+    
+    return {
+        'known_acc': (known_c / known_t * 100) if known_t > 0 else 0,
+        'unknown_acc': (unk_c / unk_t * 100) if unk_t > 0 else 0,
+        'known_count': f'{known_c}/{known_t}',
+        'unknown_count': f'{unk_c}/{unk_t}'
+    }
+
+
+# Visualizations
+def plot_model_comparison(results, output_dir):
+    """Bar chart: all models dev/test accuracy"""
+    fig, ax = plt.subplots(figsize=(20, 10))
+    
+    names = list(results.keys())
+    dev = [results[n]['dev'] for n in names]
+    test = [results[n]['test'] for n in names]
+    colors = [get_model_color(n) for n in names]
+    
+    x = np.arange(len(names))
+    w = 0.35
+    
+    bars1 = ax.bar(x - w/2, dev, w, label='Վավերացում', color=colors, edgecolor='black', linewidth=1.2, alpha=0.8)
+    bars2 = ax.bar(x + w/2, test, w, label='Թեստ', color=colors, edgecolor='black', linewidth=1.2, alpha=0.5)
+    
+    for bars, vals in [(bars1, dev), (bars2, test)]:
+        for bar, val in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.15,
+                   f'{val:.2f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
+    
+    # ax.set_xlabel('Մոդել', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Ճշգրտություն (%)', fontsize=13, fontweight='bold')
+    # ax.set_title('Համեմատություն', fontsize=16, fontweight='bold', pad=20)
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, rotation=45, ha='right', fontsize=11)
+    ax.set_ylim([min(dev + test) - 2, max(dev + test) + 3])
+    ax.grid(axis='y', alpha=0.3)
+    ax.legend(fontsize=11, loc='upper left')
     plt.tight_layout()
-    
-    # Save figure
-    output_file = os.path.join(output_dir, 'model_comparison.png')
-    plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    print(f"\n  Model comparison chart saved to: {output_file}")
-    
+    plt.savefig(f'{output_dir}/model_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
+    print(f"  Saved: model_comparison.png")
 
 
-def create_word_types_comparison_chart(models_dict, test_data, output_dir):
-    """Create grouped bar chart comparing model performance on known vs unknown words."""
-    # Evaluate each model on known vs unknown words
-    model_results = {}
+def plot_word_types(models, test_data, output_dir):
+    """Bar chart: known vs unknown word accuracy"""
+    results = {}
     
-    print("\n  Evaluating models on word types...")
-    for model_name, model in models_dict.items():
-        print(f"    {model_name}...")
-        
-        # Get vocabulary
-        vocab = set(model.word_to_idx.keys())
-        
-        # Track predictions for known and unknown words
-        known_correct = 0
-        known_total = 0
-        unknown_correct = 0
-        unknown_total = 0
-        
-        for sentence in test_data:
-            words = [word for word, _ in sentence]
-            true_tags = [tag for _, tag in sentence]
-            predicted_tags = model.predict(words)
-            
-            for word, true_tag, pred_tag in zip(words, true_tags, predicted_tags):
-                # Check if word is known (case-insensitive)
-                is_known = (word in vocab or 
-                           word.lower() in vocab or 
-                           word.capitalize() in vocab)
-                
-                if is_known:
-                    known_total += 1
-                    if true_tag == pred_tag:
-                        known_correct += 1
-                else:
-                    unknown_total += 1
-                    if true_tag == pred_tag:
-                        unknown_correct += 1
-        
-        known_acc = (known_correct / known_total * 100) if known_total > 0 else 0
-        unknown_acc = (unknown_correct / unknown_total * 100) if unknown_total > 0 else 0
-        
-        model_results[model_name] = {
-            'known': known_acc,
-            'unknown': unknown_acc
+    for name, model in models.items():
+        stats = calculate_word_type_accuracy(model, test_data)
+        results[name] = {
+            'known': stats['known_acc'],
+            'unknown': stats['unknown_acc']
         }
     
-    # Create visualization
-    sns.set_style("whitegrid")
     fig, ax = plt.subplots(figsize=(14, 8))
+    names = list(results.keys())
+    known = [results[n]['known'] for n in names]
+    unknown = [results[n]['unknown'] for n in names]
     
-    models = list(model_results.keys())
-    known_accs = [model_results[m]['known'] for m in models]
-    unknown_accs = [model_results[m]['unknown'] for m in models]
+    x = np.arange(len(names))
+    w = 0.35
     
-    x = np.arange(len(models))
-    width = 0.35
+    ax.bar(x - w/2, known, w, label='Known', color=PALETTE['accent1'], edgecolor='black', linewidth=1.2, alpha=0.85)
+    ax.bar(x + w/2, unknown, w, label='Unknown', color=PALETTE['accent2'], edgecolor='black', linewidth=1.2, alpha=0.85)
     
-    bars1 = ax.bar(x - width/2, known_accs, width, label='Known Words', 
-                   color='#2ecc71', edgecolor='black', linewidth=1.2)
-    bars2 = ax.bar(x + width/2, unknown_accs, width, label='Unknown Words',
-                   color='#e74c3c', edgecolor='black', linewidth=1.2)
-    
-    # Add value labels
-    for bars in [bars1, bars2]:
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                   f'{height:.1f}%',
-                   ha='center', va='bottom', fontsize=9, fontweight='bold')
-    
-    ax.set_xlabel('Model Configuration', fontsize=12, fontweight='bold')
+    ax.set_xlabel('Model', fontsize=12, fontweight='bold')
     ax.set_ylabel('Accuracy (%)', fontsize=12, fontweight='bold')
-    ax.set_title('Model Performance: Known vs Unknown Words', 
-                fontsize=14, fontweight='bold', pad=20)
+    ax.set_title('Known vs Unknown Words', fontsize=14, fontweight='bold', pad=20)
     ax.set_xticks(x)
-    ax.set_xticklabels(models, rotation=45, ha='right', fontsize=10)
-    ax.legend(fontsize=11, loc='lower right')
+    ax.set_xticklabels(names, rotation=45, ha='right')
+    ax.legend(fontsize=11)
+    ax.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/models_word_types_comparison.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: models_word_types_comparison.png")
+
+
+def plot_viterbi_vs_posterior(model, test_data, output_dir):
+    """Bar chart: Viterbi vs Posterior accuracy"""
+    vit = model.evaluate(test_data, method='viterbi')
+    post = model.evaluate(test_data, method='posterior')
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    methods = ['Viterbi', 'Posterior']
+    accs = [vit['accuracy'] * 100, post['accuracy'] * 100]
+    colors = [PALETTE['primary'], PALETTE['secondary']]
+    
+    bars = ax.bar(methods, accs, color=colors, alpha=0.85, edgecolor='black', linewidth=1.2)
+    
+    for bar, acc in zip(bars, accs):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+               f'{acc:.2f}%', ha='center', va='bottom', fontsize=12, fontweight='bold')
+    
+    ax.set_ylabel('Accuracy (%)', fontsize=12, fontweight='bold')
+    ax.set_title('Viterbi vs Posterior Decoding', fontsize=14, fontweight='bold', pad=20)
+    ax.set_ylim([min(accs) - 2, max(accs) + 3])
     ax.grid(axis='y', alpha=0.3)
     
+    # Info box
+    diff = accs[0] - accs[1]
+    info = f'Difference: {diff:.2f}%\nViterbi: {vit["correct"]}/{vit["total_tokens"]}\nPosterior: {post["correct"]}/{post["total_tokens"]}'
+    ax.text(0.98, 0.02, info, transform=ax.transAxes, fontsize=10,
+           verticalalignment='bottom', horizontalalignment='right',
+           bbox=dict(boxstyle='round', facecolor=PALETTE['neutral'], alpha=0.2, edgecolor='black'))
+    
     plt.tight_layout()
-    
-    # Save figure
-    output_file = os.path.join(output_dir, 'models_word_types_comparison.png')
-    plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    print(f"\n  Word types comparison saved to: {output_file}")
-    
+    plt.savefig(f'{output_dir}/viterbi_vs_posterior.png', dpi=300, bbox_inches='tight')
     plt.close()
-    
-    return model_results
+    print(f"  Saved: viterbi_vs_posterior.png")
 
 
-def main():
-    """Generate all visualizations."""
+def plot_marginal_probabilities(model, train_data, output_dir):
+    """Bar chart: tag distribution in training data"""
+    tag_counts = {tag: 0 for tag in model.states}
+    total = 0
     
-    print("="*70)
-    print("GENERATING ALL HMM VISUALIZATIONS")
-    print("="*70)
+    for sent in train_data:
+        for _, tag in sent:
+            if tag in tag_counts:
+                tag_counts[tag] += 1
+                total += 1
     
-    # Load Data
-    print("\n[1] Loading Dataset...")
-    train_data, dev_data, test_data = load_armenian_dataset()
-    combined_train_data = train_data + dev_data
+    items = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
+    tags = [t for t, _ in items]
+    probs = [c / total for _, c in items]
     
-    print(f"  Training: {len(combined_train_data)} sentences")
-    print(f"  Test: {len(test_data)} sentences")
+    fig, ax = plt.subplots(figsize=(12, 6))
+    bars = ax.bar(range(len(tags)), probs, color=PALETTE['primary'], alpha=0.8, edgecolor='black', linewidth=1.2)
+
+    # # Highlight top 3    
+    # for i in range(min(3, len(bars))):
+    #     bars[i].set_color(PALETTE['accent1'])
     
-    # Train all model configurations
-    print("\n[2] Training All Model Configurations...")
+    ax.set_xticks(range(len(tags)))
+    ax.set_xticklabels(tags, rotation=45, ha='right')
+    ax.set_ylabel('Հավանականություն', fontsize=12)
+    # ax.set_title('Պիտակների բաշխում', fontsize=14, fontweight='bold')
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/marginal_probabilities.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: marginal_probabilities.png")
+
+
+def plot_transition_graph(model, output_dir, min_prob=0.05):
+    """Network graph: HMM state transitions"""
+    visualize_transition_graph(model, min_prob=min_prob, save_path=f'{output_dir}/transition_graph.png')
+    print(f"  Saved: transition_graph.png")
+
+
+def plot_transition_matrix(model, output_dir):
+    """Heatmap: transition probability matrix"""
+    visualize_transition_matrix(model, save_path=f'{output_dir}/transition_matrix.png')
+    print(f"  Saved: transition_matrix.png")
+
+
+def plot_confusion_matrix(model, test_data, output_dir):
+    """Heatmap: confusion matrix"""
+    visualize_confusion_matrix(model, test_data, save_path=f'{output_dir}/confusion_matrix.png')
+    print(f"  Saved: confusion_matrix.png")
+
+
+def plot_initial_probabilities(model, output_dir):
+    """Bar chart: initial state probabilities"""
+    visualize_initial_probabilities(model, save_path=f'{output_dir}/initial_probabilities.png')
+    print(f"  Saved: initial_probabilities.png")
+
+
+def plot_viterbi_path(model, output_dir):
+    """Path visualization: sample Viterbi decoding"""
+    words =     [ 'Ես',  'իմ', 'անուշ', 'Հայաստանի', 'արևահամ', 'բառն', 'եմ', 'սիրում',  '։'  ]
+    true_tags = ['PRON', 'DET', 'ADJ',    'PROPN',     'ADJ',   'NOUN', 'AUX', 'VERB', 'PUNCT']
     
-    configurations = [
-        {
-            'name': 'Classical HMM (no affix)',
-            'params': {'use_suffix_model': False, 'use_prefix_model': False}
-        },
-        {
-            'name': 'Suffix-only (n=2)',
-            'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': False}
-        },
-        {
-            'name': 'Suffix-only (n=3)',
-            'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': False}
-        },
-        {
-            'name': 'Suffix-only (n=4)',
-            'params': {'use_suffix_model': True, 'suffix_length': 4, 'use_prefix_model': False}
-        },
-        {
-            'name': 'Prefix-only (n=2)',
-            'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 2}
-        },
-        {
-            'name': 'Prefix-only (n=3)',
-            'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 3}
-        },
-        {
-            'name': 'Prefix-only (n=4)',
-            'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 4}
-        },
-        {
-            'name': 'Prefix+Suffix (pref=2, suff=2)',
-            'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': True, 'prefix_length': 2}
-        },
-        {
-            'name': 'Prefix+Suffix (pref=3, suff=3)',
-            'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': True, 'prefix_length': 3}
-        },
-        {
-            'name': 'Prefix+Suffix (pref=3, suff=2)',
-            'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': True, 'prefix_length': 3}
-        },
-        {
-            'name': 'Prefix+Suffix (pref=2, suff=3)',
-            'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': True, 'prefix_length': 2}
-        },
-        {
-            'name': 'Prefix+Suffix (pref=4, suff=4)',
-            'params': {'use_suffix_model': True, 'suffix_length': 4, 'use_prefix_model': True, 'prefix_length': 4}
-        },
+    pred_tags = model.predict(words)
+    
+    fig, ax = plt.subplots(figsize=(16, 9))
+    
+    # Brighter, more vibrant colors
+    WORD_COLOR = '#87CEEB'       # Sky blue - brighter for words
+    CORRECT_COLOR = '#90EE90'    # Light green - brighter for correct predictions
+    WRONG_COLOR = '#FFB6C1'      # Light pink - brighter for wrong predictions
+    ARROW_COLOR = '#4169E1'      # Royal blue - brighter for transitions
+    EMISSION_COLOR = '#9370DB'   # Medium purple - brighter for emissions
+    BORDER_COLOR = '#2F4F4F'     # Dark slate gray - borders
+    
+    n_words = len(words)
+    
+    # Word boxes
+    for i, word in enumerate(words):
+        box = FancyBboxPatch((i - 0.4, -0.5), 0.8, 0.8, boxstyle="round,pad=0.1",
+                            edgecolor=BORDER_COLOR, facecolor=WORD_COLOR,
+                            linewidth=2.5, alpha=0.95)
+        ax.add_patch(box)
+        display_word = word[:12] + '...' if len(word) > 12 else word
+        ax.text(i, -0.1, display_word, ha='center', va='center',
+               fontsize=10, fontweight='bold', color=BORDER_COLOR)
+    
+    # Tag boxes
+    for i, tag in enumerate(pred_tags):
+        color = WRONG_COLOR if true_tags[i] != tag else CORRECT_COLOR
+        box = FancyBboxPatch((i - 0.4, 1.2), 0.8, 0.8, boxstyle="round,pad=0.1",
+                            edgecolor=BORDER_COLOR, facecolor=color,
+                            linewidth=2.5, alpha=0.95)
+        ax.add_patch(box)
+        ax.text(i, 1.6, tag, ha='center', va='center',
+               fontsize=11, fontweight='bold', color=BORDER_COLOR)
+    
+    # Emission arrows (word to tag)
+    for i in range(n_words):
+        ax.annotate('', xy=(i, 1.2), xytext=(i, 0.3),
+                   arrowprops=dict(arrowstyle='->', lw=2.5, color=EMISSION_COLOR, alpha=0.8))
+    
+    # Transition arrows (tag to tag) - corrected to go between tag boxes
+    for i in range(n_words - 1):
+        ax.annotate('', xy=(i + 0.6, 1.6), xytext=(i + 0.4, 1.6),
+                   arrowprops=dict(arrowstyle='->', lw=2.5, color=ARROW_COLOR,
+                                 alpha=0.8, connectionstyle='arc3,rad=0'))
+    
+    # True tags (show only differences)
+    for i, tag in enumerate(true_tags):
+        if tag != pred_tags[i]:
+            ax.text(i, 2.5, f"True: {tag}", ha='center', va='center',
+                   fontsize=9, style='italic', color='#DC143C',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='#FFF0F0',
+                            edgecolor='#DC143C', linewidth=1.5, alpha=0.9))
+    
+    # Legend
+    legend_elements = [
+        Patch(facecolor=WORD_COLOR, edgecolor=BORDER_COLOR, label='Input Words', linewidth=2),
+        Patch(facecolor=CORRECT_COLOR, edgecolor=BORDER_COLOR, label='Correct Predictions', linewidth=2),
+        Patch(facecolor=WRONG_COLOR, edgecolor=BORDER_COLOR, label='Wrong Predictions', linewidth=2),
+        Patch(facecolor='none', edgecolor=EMISSION_COLOR, label='Emission (Word→Tag)', linewidth=2),
+        Patch(facecolor='none', edgecolor=ARROW_COLOR, label='Transition (Tag→Tag)', linewidth=2)
     ]
+    ax.legend(handles=legend_elements, loc='upper left', fontsize=10, framealpha=0.95,
+             edgecolor=BORDER_COLOR, fancybox=True)
     
-    # Train and evaluate each configuration
-    results = {}
-    trained_models = {}
+    ax.set_xlim(-0.5, n_words - 0.5)
+    ax.set_ylim(-1.2, 3.2)
+    ax.axis('off')
     
-    for config in configurations:
-        model, accuracy = train_and_evaluate(
-            combined_train_data, 
-            test_data, 
-            config['name'], 
-            **config['params']
-        )
-        results[config['name']] = accuracy
-        trained_models[config['name']] = model
+    n_correct = sum(1 for p, t in zip(pred_tags, true_tags) if p == t)
+    accuracy = n_correct / len(true_tags) * 100
+    title = f'Viterbi Decoding Path Visualization\nAccuracy: {n_correct}/{len(true_tags)} ({accuracy:.1f}%)'
     
-    # Print summary
-    print(f"\n{'='*70}")
-    print("ACCURACY SUMMARY")
-    print(f"{'='*70}")
-    for name, accuracy in results.items():
-        print(f"{name:<45} {accuracy:>6.2f}%")
-    
-    # Create output directory
-    output_dir = 'visualizations'
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Generate comprehensive comparison visualization
-    print("\n[3] Generating Comprehensive Model Comparison...")
-    create_comprehensive_comparison_chart(results, output_dir)
-    
-    # Generate word types comparison for selected models
-    print("\n[4] Generating Word Types Comparison...")
-    selected_models = {
-        'Classical HMM (no affix)': trained_models['Classical HMM (no affix)'],
-        'Suffix-only (n=2)': trained_models['Suffix-only (n=2)'],
-        'Suffix-only (n=3)': trained_models['Suffix-only (n=3)'],
-        'Suffix-only (n=4)': trained_models['Suffix-only (n=4)'],
-        'Prefix-only (n=2)': trained_models['Prefix-only (n=2)'],
-        'Prefix+Suffix (pref=2, suff=2)': trained_models['Prefix+Suffix (pref=2, suff=2)'],
-        'Prefix+Suffix (pref=3, suff=3)': trained_models['Prefix+Suffix (pref=3, suff=3)'],
-        'Prefix+Suffix (pref=2, suff=3)': trained_models['Prefix+Suffix (pref=2, suff=3)'],
-    }
-    word_type_results = create_word_types_comparison_chart(selected_models, test_data, output_dir)
-    
-    print("\n  Word Type Accuracy Results:")
-    for model_name, accs in word_type_results.items():
-        print(f"    {model_name}:")
-        print(f"      Known: {accs['known']:.2f}%, Unknown: {accs['unknown']:.2f}%")
-    
-    # Use the best model for detailed visualizations (Prefix+Suffix pref=2, suff=3)
-    best_model = trained_models['Prefix+Suffix (pref=2, suff=3)']
-    
-    # Generate detailed visualizations for best model
-    print("\n[5] Generating Detailed Visualizations (Best Model: Prefix+Suffix pref=2, suff=3)...")
-    
-    print("  Creating suffix pattern analysis...")
-    visualize_suffix_patterns(best_model, top_n=30,
-                             save_path=f'{output_dir}/suffix_patterns.png')
-    
-    print("  Creating unknown word performance analysis...")
-    stats = visualize_unknown_word_performance(best_model, test_data,
-                                              save_path=f'{output_dir}/unknown_word_performance.png')
-    
-    print(f"\n  Known words accuracy: {stats['known_accuracy']:.2f}%")
-    print(f"  Unknown words accuracy: {stats['unknown_accuracy']:.2f}%")
-    
-    print("\n  Generating all standard visualizations...")
-    create_all_visualizations(best_model, test_data, output_dir)
-    
-    # Summary
-    print("\n" + "="*70)
-    print("VISUALIZATION SUMMARY")
+    plt.title(title, fontsize=16, fontweight='bold', pad=20, color=BORDER_COLOR)
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/viterbi_path_sample.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: viterbi_path_sample.png")
+
+
+def plot_suffix_patterns(model, output_dir, top_n=30):
+    """Heatmap: suffix patterns and their tag probabilities"""
+    if not hasattr(model, 'suffix_probs') or not model.suffix_probs:
+        print(f"  Skipped: suffix_patterns.png (no suffix model)")
+        return
+    visualize_suffix_patterns(model, top_n=top_n, save_path=f'{output_dir}/suffix_patterns.png')
+    print(f"  Saved: suffix_patterns.png")
+
+
+# Main
+def main():
     print("="*70)
-    print(f"\nAll visualizations saved to '{output_dir}/' directory:")
-    print("  1. model_comparison.png - All model configurations")
-    print("  2. models_word_types_comparison.png - Known vs unknown word performance")
-    print("  3. suffix_patterns.png - Top 30 suffix patterns learned")
-    print("  4. unknown_word_performance.png - Known vs unknown word accuracy")
-    print("  5. transition_graph.png - State transition network")
-    print("  6. transition_matrix.png - Transition probability heatmap")
-    print("  7. initial_probabilities.png - Initial state probabilities")
-    print("  8. confusion_matrix.png - Prediction confusion matrix")
-    print("  9. viterbi_path_sample.png - Sample Viterbi decoding path")
+    print("GENERATING HMM POS TAGGING VISUALIZATIONS")
+    print("="*70)
+    
+    # Load data
+    print("\n[1] Loading dataset...")
+    train_data, dev_data, test_data = load_armenian_dataset()
+    print(f"  Train: {len(train_data)}, Dev: {len(dev_data)}, Test: {len(test_data)}")
+    
+    # Train models
+    print("\n[2] Training models...")
+    configs = get_configs()
+    results = {}
+    models = {}
+    
+    for cfg in configs:
+        model, dev_acc, test_acc = train_model(train_data, dev_data, test_data, cfg['name'], **cfg['params'])
+        results[cfg['name']] = {'dev': dev_acc, 'test': test_acc}
+        models[cfg['name']] = model
+    
+    # Best model
+    best = max(results.items(), key=lambda x: x[1]['test'])
+    print(f"\n  Best: {best[0]} (Test: {best[1]['test']:.2f}%)")
+    best_model = models[best[0]]
+    
+    # Create output dir
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # Generate visualizations
+    print("\n[3] Generating visualizations...")
+    
+    plot_model_comparison(results, OUTPUT_DIR)
+    
+    # selected = {n: models[n] for n in get_selected_models()}
+    # plot_word_types(selected, test_data, OUTPUT_DIR)
+    
+    # plot_viterbi_vs_posterior(best_model, test_data, OUTPUT_DIR)
+    # plot_marginal_probabilities(best_model, train_data, OUTPUT_DIR)
+    # plot_transition_graph(best_model, OUTPUT_DIR)
+    # plot_transition_matrix(best_model, OUTPUT_DIR)
+    # plot_confusion_matrix(best_model, test_data, OUTPUT_DIR)
+    # plot_initial_probabilities(best_model, OUTPUT_DIR)
+    # plot_viterbi_path(best_model, OUTPUT_DIR)
+    # plot_suffix_patterns(best_model, OUTPUT_DIR)
+    
     print("\n" + "="*70)
+    print("COMPLETE! Check visualizations/ directory")
+    print("="*70)
 
 
 if __name__ == "__main__":

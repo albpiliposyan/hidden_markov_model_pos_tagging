@@ -9,12 +9,12 @@ class TrigramHMM:
     def __init__(self):
         """Initialize trigram HMM with default smoothing (1e-10)."""
         self.smoothing = 1e-10
-        self.tags = None  # List of individual POS tags
-        self.states = None  # List of state pairs (tag_i, tag_j)
-        self.V = None  # Vocabulary
-        self.A = None  # Transition probabilities: P(tag_k | tag_i, tag_j)
-        self.B = None  # Emission probabilities: P(word | tag_i, tag_j)
-        self.pi = None  # Initial probabilities for first two tags
+        self.tags = None
+        self.states = None
+        self.vocabulary = None
+        self.transition_probs = None
+        self.emission_probs = None
+        self.initial_probs = None
         
         # Mappings
         self.tag_to_idx = {}
@@ -47,7 +47,7 @@ class TrigramHMM:
         print(f"Training complete!")
         print(f"  Individual POS tags: {len(self.tags)}")
         print(f"  States (tag pairs): {len(self.states)}")
-        print(f"  Vocabulary size: {len(self.V)}")
+        print(f"  Vocabulary size: {len(self.vocabulary)}")
         
     def _build_vocabulary_and_tagset(self, train_data):
         """Extract unique words and POS tags."""
@@ -60,11 +60,11 @@ class TrigramHMM:
                 words_set.add(word)
         
         self.tags = sorted(list(tags_set))
-        self.V = sorted(list(words_set))
+        self.vocabulary = sorted(list(words_set))
         
         # Create tag mappings
         self.tag_to_idx = {tag: idx for idx, tag in enumerate(self.tags)}
-        self.word_to_idx = {word: idx for idx, word in enumerate(self.V)}
+        self.word_to_idx = {word: idx for idx, word in enumerate(self.vocabulary)}
         self.idx_to_word = {idx: word for word, idx in self.word_to_idx.items()}
     
     def _build_state_space(self):
@@ -93,13 +93,13 @@ class TrigramHMM:
         
         total_sentences = len(train_data)
         n_states = len(self.states)
-        self.pi = np.zeros(n_states)
+        self.initial_probs = np.zeros(n_states)
         
         for state in self.states:
             count = self.initial_counts[state]
             state_idx = self.state_to_idx[state]
             # Add-epsilon smoothing
-            self.pi[state_idx] = (count + self.smoothing) / (total_sentences + self.smoothing * n_states)
+            self.initial_probs[state_idx] = (count + self.smoothing) / (total_sentences + self.smoothing * n_states)
     
     def _compute_transition_probabilities(self, train_data):
         """Compute A[i][j] = P(tag_k | tag_i, tag_j) where state is (tag_i, tag_j)."""
@@ -134,7 +134,7 @@ class TrigramHMM:
         # Compute probabilities
         n_states = len(self.states)
         n_tags = len(self.tags)
-        self.A = np.zeros((n_states, n_tags))
+        self.transition_probs = np.zeros((n_states, n_tags))
         
         for state_idx, state in enumerate(self.states):
             total = self.state_counts[state]
@@ -142,7 +142,7 @@ class TrigramHMM:
             for tag_idx, next_tag in enumerate(self.tags):
                 count = self.transition_counts[state][next_tag]
                 # Add-epsilon smoothing
-                self.A[state_idx][tag_idx] = (count + self.smoothing) / (total + self.smoothing * n_tags)
+                self.transition_probs[state_idx][tag_idx] = (count + self.smoothing) / (total + self.smoothing * n_tags)
     
     def _compute_emission_probabilities(self, train_data):
         """Compute B[i][j] = P(word_j | state_i) where state is (tag1, tag2)."""
@@ -153,7 +153,7 @@ class TrigramHMM:
         for state in self.states:
             self.emission_counts[state] = {}
             state_total_counts[state] = 0
-            for word in self.V:
+            for word in self.vocabulary:
                 self.emission_counts[state][word] = 0
         
         # Count emissions from second tag in each state
@@ -169,21 +169,20 @@ class TrigramHMM:
         
         # Compute probabilities
         n_states = len(self.states)
-        n_words = len(self.V)
-        self.B = np.zeros((n_states, n_words))
+        n_words = len(self.vocabulary)
+        self.emission_probs = np.zeros((n_states, n_words))
         
         for state_idx, state in enumerate(self.states):
             total = state_total_counts[state]
             
-            for word_idx, word in enumerate(self.V):
+            for word_idx, word in enumerate(self.vocabulary):
                 count = self.emission_counts[state][word]
                 # Add-epsilon smoothing
-                self.B[state_idx][word_idx] = (count + self.smoothing) / (total + self.smoothing * n_words)
+                self.emission_probs[state_idx][word_idx] = (count + self.smoothing) / (total + self.smoothing * n_words)
     
     def viterbi(self, sentence_words):
         """Viterbi algorithm for second-order HMM."""
         if len(sentence_words) < 2:
-            # Fallback for very short sentences
             return [self.tags[0]] * len(sentence_words)
         
         n_states = len(self.states)
@@ -203,12 +202,13 @@ class TrigramHMM:
             word = sentence_words[1]
             if word in self.word_to_idx:
                 word_idx = self.word_to_idx[word]
-                emission_prob = self.B[state_idx][word_idx]
+                emission_prob = self.emission_probs[state_idx][word_idx]
             else:
+                # Uniform unknown word probabilities
                 emission_prob = unk_prob
             
             # Initial probability * emission
-            viterbi_matrix[state_idx][1] = self.pi[state_idx] * emission_prob
+            viterbi_matrix[state_idx][1] = self.initial_probs[state_idx] * emission_prob
         
         # Recursion (t=2 to T-1)
         for t in range(2, n_obs):
@@ -221,7 +221,7 @@ class TrigramHMM:
                 # Get emission probability for this state
                 if word in self.word_to_idx:
                     word_idx = self.word_to_idx[word]
-                    emission_prob = self.B[curr_state_idx][word_idx]
+                    emission_prob = self.emission_probs[curr_state_idx][word_idx]
                 else:
                     emission_prob = unk_prob
                 
@@ -239,7 +239,7 @@ class TrigramHMM:
                     
                     # Get transition probability P(tag_curr | tag_prevprev, tag_prev)
                     tag_curr_idx = self.tag_to_idx[tag_curr]
-                    transition_prob = self.A[prev_state_idx][tag_curr_idx]
+                    transition_prob = self.transition_probs[prev_state_idx][tag_curr_idx]
                     
                     # Calculate probability
                     prob = viterbi_matrix[prev_state_idx][t-1] * transition_prob
@@ -287,7 +287,7 @@ class TrigramHMM:
         """Alias for viterbi."""
         return self.viterbi(sentence_words)
     
-    def evaluate(self, test_data):
+    def evaluate(self, test_data, method='viterbi'):
         """Evaluate HMM accuracy on test data."""
         total_tokens = 0
         correct_predictions = 0

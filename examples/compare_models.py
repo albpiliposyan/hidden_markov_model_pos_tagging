@@ -33,25 +33,25 @@ def main():
     # Load Data
     print("\n[1] Loading Dataset...")
     train_data, dev_data, test_data = load_armenian_dataset()
-    combined_train_data = train_data + dev_data
     
-    print(f"  Training: {len(combined_train_data)} sentences")
+    print(f"  Training: {len(train_data)} sentences")
+    print(f"  Development: {len(dev_data)} sentences")
     print(f"  Test: {len(test_data)} sentences")
     
     # Train Basic HMM (without suffix model)
     print("\n[2] Training Basic HMM (uniform unknown word handling)...")
     basic_hmm = HiddenMarkovModel(use_suffix_model=False)
-    basic_hmm.train(combined_train_data)
+    basic_hmm.train(train_data)
     
     # Train Suffix-Enhanced HMM
     print("\n[3] Training Suffix-Enhanced HMM (bigram)...")
     suffix_hmm = HiddenMarkovModel(use_suffix_model=True)
-    suffix_hmm.train(combined_train_data)
+    suffix_hmm.train(train_data)
     
     # # Train Trigram HMM (commented out - too slow)
     # print("\n[4] Training Trigram HMM (second-order)...")
     # trigram_hmm = TrigramHMM()
-    # trigram_hmm.train(combined_train_data)
+    # trigram_hmm.train(train_data)
     
     # Evaluate All Models
     print("\n[4] Evaluating All Models on Test Set...")

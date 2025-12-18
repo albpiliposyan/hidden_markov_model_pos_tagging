@@ -15,14 +15,16 @@ This project utilizes the **Armenian Treebank (ArmTDP)** from the Universal Depe
 
 ## Dataset Statistics
 
-The Armenian UD Treebank is divided into three standard splits:
+The Armenian UD Treebank contains 2,500 sentences with 52,585 tokens total. This project uses a random 80-10-10 split (with seed=42 for reproducibility):
 
-| Split | Sentences | Tokens | Purpose |
-|-------|-----------|---------|----------|
-| **Training** | 1,974 | 42,069 | Model parameter estimation |
-| **Development** | 249 | 5,359 | Hyperparameter tuning |
-| **Test** | 277 | 5,157 | Final evaluation |
-| **Total** | 2,500 | 52,585 | Complete dataset |
+| Split           | Sentences | Tokens (approx) | Purpose                                    |
+|-------|---------|-----------|-----------------|--------------------------------------------|
+| **Training**    | ~2,000    | ~42,000         | Model parameter estimation                 |
+| **Development** | ~250      | ~5,300          | Hyperparameter tuning and model selection  |
+| **Test**        | ~250      | ~5,300          | Final evaluation                           |
+| **Total**       | 2,500     | 52,585          | Complete dataset                           |
+
+**Note**: The dataset is randomly shuffled and split at runtime, not using the original predefined splits from the CoNLL-U files. This ensures balanced distribution across splits.
 
 ## POS Tag Distribution
 
@@ -73,16 +75,6 @@ Each file follows the CoNLL-U format with 10 tab-separated columns per token:
 
 ## Dataset Characteristics
 
-### Language Features
-
-Armenian is an Indo-European language with the following relevant characteristics for POS tagging:
-
-- **Rich morphology**: Highly inflected with complex case and verb systems
-- **Agglutinative features**: Multiple affixes can be attached to word stems
-- **Free word order**: Relatively flexible word order compared to English
-- **Pro-drop**: Subject pronouns can be omitted
-- **Postpositions**: Uses postpositions in addition to prepositions
-
 ### Annotation Quality
 
 - **Manual annotation**: All tags are human-verified
@@ -90,51 +82,74 @@ Armenian is an Indo-European language with the following relevant characteristic
 - **Reliability**: Part of the established UD benchmark corpus
 - **Transliteration included**: Provides Latin transliteration for accessibility
 
-## Domain and Genre
-
-The dataset comprises texts from various domains:
-
-- **Nonfiction**: Essays, articles, and informative texts
-- **Fiction**: Literary works and narratives
-- **News**: Journalistic content
-- **Web**: Online content and blogs
-
-This diversity ensures the trained model generalizes well across different text types.
-
 ## Usage in This Project
 
 For our Hidden Markov Model POS tagger:
 
-1. **Training phase**: Uses word-tag pairs from the training split to estimate:
+1. **Data preprocessing**:
+   - All words are converted to lowercase for vocabulary reduction
+   - Dataset is randomly shuffled and split (80-10-10) with seed=42
+   - Only FORM (word) and UPOS (POS tag) fields are extracted
+
+2. **Training phase**: Uses word-tag pairs from the training split to estimate:
    - Initial state probabilities (π)
    - Transition probabilities (A) between POS tags
    - Emission probabilities (B) from tags to words
+   - Suffix/prefix patterns for unknown word handling (enhanced models)
 
-2. **Development phase**: The development set is used for:
-   - Validating model performance during development
+3. **Development phase**: The development set is used for:
+   - Model selection among different configurations
+   - Hyperparameter validation
    - Monitoring for overfitting
-   - Comparing different model configurations
 
-3. **Testing phase**: The test set provides:
+4. **Testing phase**: The test set provides:
    - Unbiased final evaluation
    - Performance metrics (accuracy, confusion matrix)
-   - Error analysis for model improvement
+   - Known vs unknown word analysis
 
 ## Data Loading
 
-The dataset files are loaded using the `conllu` Python library, which parses CoNLL-U format and extracts (word, POS tag) pairs for training. Only the FORM (column 2) and UPOS (column 4) fields are utilized in this implementation, as the HMM focuses exclusively on word-to-tag relationships.
+The dataset files are loaded using the `conllu` Python library, which parses CoNLL-U format. The loading process:
 
-## Challenges
+1. Loads all three CoNLL-U files (train, dev, test)
+2. Extracts (word, POS tag) pairs from FORM and UPOS columns
+3. Converts all words to lowercase
+4. Combines all sentences into a single pool
+5. Randomly shuffles with seed=42
+6. Splits into 80% train, 10% dev, 10% test
+
+This approach ensures reproducible results while maintaining balanced splits across different text domains.
+
+## Challenges and Solutions
 
 Specific challenges this dataset presents for HMM-based POS tagging:
 
 1. **Out-of-vocabulary (OOV) words**: The test set contains words not seen during training
+   - **Solution**: Suffix/prefix-enhanced models that learn morphological patterns
+   
 2. **Ambiguous words**: Many Armenian words can have multiple POS tags depending on context
+   - **Solution**: Transition probabilities capture contextual patterns
+   
 3. **Rare tags**: Some tags (SYM, INTJ, X) have very few examples
+   - **Solution**: Add-epsilon smoothing (ε = 1×10⁻¹⁰) handles unseen events
+   
 4. **Morphological complexity**: Rich inflection creates large vocabulary with sparse observations
+   - **Solution**: Lowercase normalization reduces vocabulary size
+   
 5. **Free word order**: Syntactic flexibility reduces the predictive power of tag sequences
+   - **Solution**: Trigram HMM (second-order) captures longer context
 
-Our implementation addresses these through add-epsilon smoothing (ε = 1×10⁻¹⁰) to handle unseen events and proper probability estimation techniques.
+## Model Performance
+
+With the random split approach and lowercase normalization, the models achieve:
+
+- **Classical Bigram HMM**: 86.40% accuracy
+- **Suffix-enhanced (n=2)**: 91.76% accuracy
+- **Suffix-enhanced (n=3)**: **92.06% accuracy** (best model)
+- **Prefix-enhanced (n=2)**: 88.68% accuracy
+- **Prefix-enhanced (n=3)**: 88.68% accuracy
+- **Prefix+Suffix (pref=2, suff=3)**: 91.39% accuracy
+- **Trigram HMM**: 71.10% accuracy (suffers from data sparsity)
 
 ## References
 
