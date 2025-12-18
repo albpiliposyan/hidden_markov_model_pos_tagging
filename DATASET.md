@@ -153,6 +153,4 @@ With the random split approach and lowercase normalization, the models achieve:
 
 ## References
 
-- Universal Dependencies project: https://universaldependencies.org/
 - Armenian UD Treebank: https://github.com/UniversalDependencies/UD_Armenian-ArmTDP
-- CoNLL-U format specification: https://universaldependencies.org/format.html
