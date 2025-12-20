@@ -125,17 +125,17 @@ Extended HMM where each tag depends on the previous two tags. Due to increased s
 
 Performance on Armenian UD dataset (test set accuracy):
 
-| Model Type | Configuration | Accuracy |
-|------------|--------------|----------|
-| Bigram | Classical (no affix) | 86.40% |
-| Bigram | Suffix-only (n=2) | 91.76% |
-| Bigram | Suffix-only (n=3) | **92.06%** |
-| Bigram | Prefix-only (n=2) | 88.68% |
-| Bigram | Prefix-only (n=3) | 88.68% |
-| Bigram | Prefix+Suffix (pref=3, suff=2) | 91.12% |
-| Bigram | Prefix+Suffix (pref=2, suff=3) | 91.39% |
-| Bigram | Prefix+Suffix (pref=3, suff=3) | 91.29% |
-| Trigram | Second-order HMM | 71.10% |
+| Model Type | Configuration                  | Accuracy   |
+|------------|--------------------------------|------------|
+| Bigram     | Classical (no affix)           | 86.40%     |
+| Bigram     | Suffix-only (n=2)              | 91.76%     |
+| Bigram     | Suffix-only (n=3)              | **92.06%** |
+| Bigram     | Prefix-only (n=2)              | 88.68%     |
+| Bigram     | Prefix-only (n=3)              | 88.68%     |
+| Bigram     | Prefix+Suffix (pref=3, suff=2) | 91.12%     |
+| Bigram     | Prefix+Suffix (pref=2, suff=3) | 91.39%     |
+| Bigram     | Prefix+Suffix (pref=3, suff=3) | 91.29%     |
+| Trigram    | Second-order HMM               | 71.10%     |
 
 **Note**: The main.py script automatically trains multiple configurations and selects the best model based on development set performance.
 
@@ -151,11 +151,11 @@ Each model learns four key probability distributions:
    - P(first tag in sentence)
    - Bigram: single tag probabilities
    - Trigram: tag pair probabilities
-   
+
 3. **Transition Probabilities (A)** - Tag sequence probabilities
    - Bigram: P(tag_j | tag_i)
    - Trigram: P(tag_k | tag_i, tag_j)
-   
+
 4. **Emission Probabilities (B)** - Word-tag associations
    - P(word | tag) for known words
    - P(tag | suffix/prefix) for unknown words (enhanced models)

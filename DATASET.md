@@ -18,7 +18,7 @@ This project utilizes the **Armenian Treebank (ArmTDP)** from the Universal Depe
 The Armenian UD Treebank contains 2,500 sentences with 52,585 tokens total. This project uses a random 80-10-10 split (with seed=42 for reproducibility):
 
 | Split           | Sentences | Tokens (approx) | Purpose                                    |
-|-------|---------|-----------|-----------------|--------------------------------------------|
+|-----------------|-----------|-----------------|--------------------------------------------|
 | **Training**    | ~2,000    | ~42,000         | Model parameter estimation                 |
 | **Development** | ~250      | ~5,300          | Hyperparameter tuning and model selection  |
 | **Test**        | ~250      | ~5,300          | Final evaluation                           |
@@ -126,16 +126,16 @@ Specific challenges this dataset presents for HMM-based POS tagging:
 
 1. **Out-of-vocabulary (OOV) words**: The test set contains words not seen during training
    - **Solution**: Suffix/prefix-enhanced models that learn morphological patterns
-   
+
 2. **Ambiguous words**: Many Armenian words can have multiple POS tags depending on context
    - **Solution**: Transition probabilities capture contextual patterns
-   
+
 3. **Rare tags**: Some tags (SYM, INTJ, X) have very few examples
    - **Solution**: Add-epsilon smoothing (ε = 1×10⁻¹⁰) handles unseen events
-   
+
 4. **Morphological complexity**: Rich inflection creates large vocabulary with sparse observations
    - **Solution**: Lowercase normalization reduces vocabulary size
-   
+
 5. **Free word order**: Syntactic flexibility reduces the predictive power of tag sequences
    - **Solution**: Trigram HMM (second-order) captures longer context
 
