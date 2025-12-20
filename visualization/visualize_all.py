@@ -67,17 +67,17 @@ def get_selected_models():
 # Train and evaluate
 def train_model(train_data, dev_data, test_data, name, **params):
     print(f"  {name}...", end=' ')
-    
+
     if params.pop('model_type', None) == 'trigram':
         model = TrigramHMM()
     else:
         model = HiddenMarkovModel(**params)
-    
+
     model.train(train_data)
     dev_acc = model.evaluate(dev_data)['accuracy'] * 100
     test_acc = model.evaluate(test_data)['accuracy'] * 100
     print(f"Dev: {dev_acc:.2f}%, Test: {test_acc:.2f}%")
-    
+
     return model, dev_acc, test_acc
 
 
@@ -86,12 +86,12 @@ def calculate_word_type_accuracy(model, test_data):
     """Calculate accuracy for known vs unknown words."""
     vocab = set(model.word_to_idx.keys())
     known_c = known_t = unk_c = unk_t = 0
-    
+
     for sent in test_data:
         words = [w for w, _ in sent]
         true_tags = [t for _, t in sent]
         pred_tags = model.predict(words)
-        
+
         for w, true_t, pred_t in zip(words, true_tags, pred_tags):
             if w.lower() in vocab:
                 known_t += 1
@@ -99,7 +99,7 @@ def calculate_word_type_accuracy(model, test_data):
             else:
                 unk_t += 1
                 if true_t == pred_t: unk_c += 1
-    
+
     return {
         'known_acc': (known_c / known_t * 100) if known_t > 0 else 0,
         'unknown_acc': (unk_c / unk_t * 100) if unk_t > 0 else 0,
@@ -112,23 +112,23 @@ def calculate_word_type_accuracy(model, test_data):
 def plot_model_comparison(results, output_dir):
     """Bar chart: all models dev/test accuracy"""
     fig, ax = plt.subplots(figsize=(20, 10))
-    
+
     names = list(results.keys())
     dev = [results[n]['dev'] for n in names]
     test = [results[n]['test'] for n in names]
     colors = [get_model_color(n) for n in names]
-    
+
     x = np.arange(len(names))
     w = 0.35
-    
+
     bars1 = ax.bar(x - w/2, dev, w, label='Validation', color=colors, edgecolor='black', linewidth=1.2, alpha=0.8)
     bars2 = ax.bar(x + w/2, test, w, label='Test', color=colors, edgecolor='black', linewidth=1.2, alpha=0.5)
-    
+
     for bars, vals in [(bars1, dev), (bars2, test)]:
         for bar, val in zip(bars, vals):
             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.15,
                    f'{val:.2f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
-    
+
     # ax.set_xlabel('Model', fontsize=13, fontweight='bold')
     ax.set_ylabel('Accuracy (%)', fontsize=13, fontweight='bold')
     # ax.set_title('Comparison', fontsize=16, fontweight='bold', pad=20)
@@ -146,25 +146,25 @@ def plot_model_comparison(results, output_dir):
 def plot_word_types(models, test_data, output_dir):
     """Bar chart: known vs unknown word accuracy"""
     results = {}
-    
+
     for name, model in models.items():
         stats = calculate_word_type_accuracy(model, test_data)
         results[name] = {
             'known': stats['known_acc'],
             'unknown': stats['unknown_acc']
         }
-    
+
     fig, ax = plt.subplots(figsize=(14, 8))
     names = list(results.keys())
     known = [results[n]['known'] for n in names]
     unknown = [results[n]['unknown'] for n in names]
-    
+
     x = np.arange(len(names))
     w = 0.35
-    
+
     ax.bar(x - w/2, known, w, label='Known', color=PALETTE['accent1'], edgecolor='black', linewidth=1.2, alpha=0.85)
     ax.bar(x + w/2, unknown, w, label='Unknown', color=PALETTE['accent2'], edgecolor='black', linewidth=1.2, alpha=0.85)
-    
+
     ax.set_xlabel('Model', fontsize=12, fontweight='bold')
     ax.set_ylabel('Accuracy (%)', fontsize=12, fontweight='bold')
     ax.set_title('Known vs Unknown Words', fontsize=14, fontweight='bold', pad=20)
@@ -182,30 +182,30 @@ def plot_viterbi_vs_posterior(model, test_data, output_dir):
     """Bar chart: Viterbi vs Posterior accuracy"""
     vit = model.evaluate(test_data, method='viterbi')
     post = model.evaluate(test_data, method='posterior')
-    
+
     fig, ax = plt.subplots(figsize=(10, 6))
     methods = ['Viterbi', 'Posterior']
     accs = [vit['accuracy'] * 100, post['accuracy'] * 100]
     colors = [PALETTE['primary'], PALETTE['secondary']]
-    
+
     bars = ax.bar(methods, accs, color=colors, alpha=0.85, edgecolor='black', linewidth=1.2)
-    
+
     for bar, acc in zip(bars, accs):
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
                f'{acc:.2f}%', ha='center', va='bottom', fontsize=12, fontweight='bold')
-    
+
     ax.set_ylabel('Accuracy (%)', fontsize=12, fontweight='bold')
     ax.set_title('Viterbi vs Posterior Decoding', fontsize=14, fontweight='bold', pad=20)
     ax.set_ylim([min(accs) - 2, max(accs) + 3])
     ax.grid(axis='y', alpha=0.3)
-    
+
     # Info box
     diff = accs[0] - accs[1]
     info = f'Difference: {diff:.2f}%\nViterbi: {vit["correct"]}/{vit["total_tokens"]}\nPosterior: {post["correct"]}/{post["total_tokens"]}'
     ax.text(0.98, 0.02, info, transform=ax.transAxes, fontsize=10,
            verticalalignment='bottom', horizontalalignment='right',
            bbox=dict(boxstyle='round', facecolor=PALETTE['neutral'], alpha=0.2, edgecolor='black'))
-    
+
     plt.tight_layout()
     plt.savefig(f'{output_dir}/viterbi_vs_posterior.png', dpi=300, bbox_inches='tight')
     plt.close()
@@ -216,24 +216,24 @@ def plot_marginal_probabilities(model, train_data, output_dir):
     """Bar chart: tag distribution in training data"""
     tag_counts = {tag: 0 for tag in model.states}
     total = 0
-    
+
     for sent in train_data:
         for _, tag in sent:
             if tag in tag_counts:
                 tag_counts[tag] += 1
                 total += 1
-    
+
     items = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
     tags = [t for t, _ in items]
     probs = [c / total for _, c in items]
-    
+
     fig, ax = plt.subplots(figsize=(12, 6))
     bars = ax.bar(range(len(tags)), probs, color=PALETTE['primary'], alpha=0.8, edgecolor='black', linewidth=1.2)
 
-    # # Highlight top 3    
+    # # Highlight top 3
     # for i in range(min(3, len(bars))):
     #     bars[i].set_color(PALETTE['accent1'])
-    
+
     ax.set_xticks(range(len(tags)))
     ax.set_xticklabels(tags, rotation=45, ha='right')
     ax.set_ylabel('Probability', fontsize=12)
@@ -273,11 +273,11 @@ def plot_viterbi_path(model, output_dir):
     """Path visualization: sample Viterbi decoding"""
     words =     [ 'Ես',  'իմ', 'անուշ', 'Հայաստանի', 'արևահամ', 'բառն', 'եմ', 'սիրում',  '։'  ]
     true_tags = ['PRON', 'DET', 'ADJ',    'PROPN',     'ADJ',   'NOUN', 'AUX', 'VERB', 'PUNCT']
-    
+
     pred_tags = model.predict(words)
-    
+
     fig, ax = plt.subplots(figsize=(16, 9))
-    
+
     # Brighter, more vibrant colors
     WORD_COLOR = '#87CEEB'       # Sky blue - brighter for words
     CORRECT_COLOR = '#90EE90'    # Light green - brighter for correct predictions
@@ -285,9 +285,9 @@ def plot_viterbi_path(model, output_dir):
     ARROW_COLOR = '#4169E1'      # Royal blue - brighter for transitions
     EMISSION_COLOR = '#9370DB'   # Medium purple - brighter for emissions
     BORDER_COLOR = '#2F4F4F'     # Dark slate gray - borders
-    
+
     n_words = len(words)
-    
+
     # Word boxes
     for i, word in enumerate(words):
         box = FancyBboxPatch((i - 0.4, -0.5), 0.8, 0.8, boxstyle="round,pad=0.1",
@@ -297,7 +297,7 @@ def plot_viterbi_path(model, output_dir):
         display_word = word[:12] + '...' if len(word) > 12 else word
         ax.text(i, -0.1, display_word, ha='center', va='center',
                fontsize=10, fontweight='bold', color=BORDER_COLOR)
-    
+
     # Tag boxes
     for i, tag in enumerate(pred_tags):
         color = WRONG_COLOR if true_tags[i] != tag else CORRECT_COLOR
@@ -307,18 +307,18 @@ def plot_viterbi_path(model, output_dir):
         ax.add_patch(box)
         ax.text(i, 1.6, tag, ha='center', va='center',
                fontsize=11, fontweight='bold', color=BORDER_COLOR)
-    
+
     # Emission arrows (word to tag)
     for i in range(n_words):
         ax.annotate('', xy=(i, 1.2), xytext=(i, 0.3),
                    arrowprops=dict(arrowstyle='->', lw=2.5, color=EMISSION_COLOR, alpha=0.8))
-    
+
     # Transition arrows (tag to tag) - corrected to go between tag boxes
     for i in range(n_words - 1):
         ax.annotate('', xy=(i + 0.6, 1.6), xytext=(i + 0.4, 1.6),
                    arrowprops=dict(arrowstyle='->', lw=2.5, color=ARROW_COLOR,
                                  alpha=0.8, connectionstyle='arc3,rad=0'))
-    
+
     # True tags (show only differences)
     for i, tag in enumerate(true_tags):
         if tag != pred_tags[i]:
@@ -326,7 +326,7 @@ def plot_viterbi_path(model, output_dir):
                    fontsize=9, style='italic', color='#DC143C',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='#FFF0F0',
                             edgecolor='#DC143C', linewidth=1.5, alpha=0.9))
-    
+
     # Legend
     legend_elements = [
         Patch(facecolor=WORD_COLOR, edgecolor=BORDER_COLOR, label='Input Words', linewidth=2),
@@ -337,15 +337,15 @@ def plot_viterbi_path(model, output_dir):
     ]
     ax.legend(handles=legend_elements, loc='upper left', fontsize=10, framealpha=0.95,
              edgecolor=BORDER_COLOR, fancybox=True)
-    
+
     ax.set_xlim(-0.5, n_words - 0.5)
     ax.set_ylim(-1.2, 3.2)
     ax.axis('off')
-    
+
     n_correct = sum(1 for p, t in zip(pred_tags, true_tags) if p == t)
     accuracy = n_correct / len(true_tags) * 100
     title = f'Viterbi Decoding Path Visualization\nAccuracy: {n_correct}/{len(true_tags)} ({accuracy:.1f}%)'
-    
+
     plt.title(title, fontsize=16, fontweight='bold', pad=20, color=BORDER_COLOR)
     plt.tight_layout()
     plt.savefig(f'{output_dir}/viterbi_path_sample.png', dpi=300, bbox_inches='tight')
@@ -367,39 +367,39 @@ def main():
     print("="*70)
     print("GENERATING HMM POS TAGGING VISUALIZATIONS")
     print("="*70)
-    
+
     # Load data
     print("\n[1] Loading dataset...")
     train_data, dev_data, test_data = load_armenian_dataset()
     print(f"  Train: {len(train_data)}, Dev: {len(dev_data)}, Test: {len(test_data)}")
-    
+
     # Train models
     print("\n[2] Training models...")
     configs = get_configs()
     results = {}
     models = {}
-    
+
     for cfg in configs:
         model, dev_acc, test_acc = train_model(train_data, dev_data, test_data, cfg['name'], **cfg['params'])
         results[cfg['name']] = {'dev': dev_acc, 'test': test_acc}
         models[cfg['name']] = model
-    
+
     # Best model
     best = max(results.items(), key=lambda x: x[1]['test'])
     print(f"\n  Best: {best[0]} (Test: {best[1]['test']:.2f}%)")
     best_model = models[best[0]]
-    
+
     # Create output dir
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    
+
     # Generate visualizations
     print("\n[3] Generating visualizations...")
-    
+
     plot_model_comparison(results, OUTPUT_DIR)
-    
+
     selected = {n: models[n] for n in get_selected_models()}
     plot_word_types(selected, test_data, OUTPUT_DIR)
-    
+
     plot_viterbi_vs_posterior(best_model, test_data, OUTPUT_DIR)
     plot_marginal_probabilities(best_model, train_data, OUTPUT_DIR)
     plot_transition_graph(best_model, OUTPUT_DIR)
@@ -408,7 +408,7 @@ def main():
     plot_initial_probabilities(best_model, OUTPUT_DIR)
     plot_viterbi_path(best_model, OUTPUT_DIR)
     plot_suffix_patterns(best_model, OUTPUT_DIR)
-    
+
     print("\n" + "="*70)
     print("COMPLETE! Check visualizations/ directory")
     print("="*70)
