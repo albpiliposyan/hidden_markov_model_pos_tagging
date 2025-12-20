@@ -39,29 +39,29 @@ MODEL_COLORS = {
 # Model configs
 def get_configs():
     return [
-        {'name': 'I-կարգի ԹՄՄ', 'params': {'use_suffix_model': False, 'use_prefix_model': False}},
-        {'name': 'II-կարգի ԹՄՄ', 'params': {'model_type': 'trigram'}},
-        {'name': 'Վերջ-2', 'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': False}},
-        {'name': 'Վերջ-3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': False}},
-        {'name': 'Նախ-2', 'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 2}},
-        {'name': 'Նախ-3', 'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 3}},
-        {'name': 'Ն3+Վ2', 'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': True, 'prefix_length': 3}},
-        {'name': 'Ն2+Վ3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': True, 'prefix_length': 2}},
-        {'name': 'Ն3+Վ3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': True, 'prefix_length': 3}},
+        {'name': 'Bigram HMM', 'params': {'use_suffix_model': False, 'use_prefix_model': False}},
+        {'name': 'Trigram HMM', 'params': {'model_type': 'trigram'}},
+        {'name': 'Suf-2', 'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': False}},
+        {'name': 'Suf-3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': False}},
+        {'name': 'Pref-2', 'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 2}},
+        {'name': 'Pref-3', 'params': {'use_suffix_model': False, 'use_prefix_model': True, 'prefix_length': 3}},
+        {'name': 'P3+S2', 'params': {'use_suffix_model': True, 'suffix_length': 2, 'use_prefix_model': True, 'prefix_length': 3}},
+        {'name': 'P2+S3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': True, 'prefix_length': 2}},
+        {'name': 'P3+S3', 'params': {'use_suffix_model': True, 'suffix_length': 3, 'use_prefix_model': True, 'prefix_length': 3}},
     ]
 
 
 def get_model_color(name):
-    if 'II-կարգի ԹՄՄ' in name: return PALETTE['accent3']
-    if 'I-կարգի ԹՄՄ' in name: return MODEL_COLORS['classical']
+    if 'Trigram HMM' in name: return PALETTE['accent3']
+    if 'Bigram HMM' in name: return MODEL_COLORS['classical']
     if '+' in name: return MODEL_COLORS['prefix_suffix']
-    if 'Վերջ' in name: return MODEL_COLORS['suffix']
-    if 'Նախ' in name: return MODEL_COLORS['prefix']
+    if 'Suf' in name: return MODEL_COLORS['suffix']
+    if 'Pref' in name: return MODEL_COLORS['prefix']
     return PALETTE['neutral']
 
 
 def get_selected_models():
-    return ['I-կարգի ԹՄՄ', 'Նախ-2', 'Նախ-3', 'Վերջ-3', 'Ն3+Վ3', 'Ն2+Վ3']
+    return ['Bigram HMM', 'Pref-2', 'Pref-3', 'Suf-3', 'P3+S3', 'P2+S3']
 
 
 # Train and evaluate
@@ -121,17 +121,17 @@ def plot_model_comparison(results, output_dir):
     x = np.arange(len(names))
     w = 0.35
     
-    bars1 = ax.bar(x - w/2, dev, w, label='Վավերացում', color=colors, edgecolor='black', linewidth=1.2, alpha=0.8)
-    bars2 = ax.bar(x + w/2, test, w, label='Թեստ', color=colors, edgecolor='black', linewidth=1.2, alpha=0.5)
+    bars1 = ax.bar(x - w/2, dev, w, label='Validation', color=colors, edgecolor='black', linewidth=1.2, alpha=0.8)
+    bars2 = ax.bar(x + w/2, test, w, label='Test', color=colors, edgecolor='black', linewidth=1.2, alpha=0.5)
     
     for bars, vals in [(bars1, dev), (bars2, test)]:
         for bar, val in zip(bars, vals):
             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.15,
                    f'{val:.2f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
     
-    # ax.set_xlabel('Մոդել', fontsize=13, fontweight='bold')
-    ax.set_ylabel('Ճշգրտություն (%)', fontsize=13, fontweight='bold')
-    # ax.set_title('Համեմատություն', fontsize=16, fontweight='bold', pad=20)
+    # ax.set_xlabel('Model', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Accuracy (%)', fontsize=13, fontweight='bold')
+    # ax.set_title('Comparison', fontsize=16, fontweight='bold', pad=20)
     ax.set_xticks(x)
     ax.set_xticklabels(names, rotation=45, ha='right', fontsize=11)
     ax.set_ylim([min(dev + test) - 2, max(dev + test) + 3])
@@ -236,8 +236,8 @@ def plot_marginal_probabilities(model, train_data, output_dir):
     
     ax.set_xticks(range(len(tags)))
     ax.set_xticklabels(tags, rotation=45, ha='right')
-    ax.set_ylabel('Հավանականություն', fontsize=12)
-    # ax.set_title('Պիտակների բաշխում', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Probability', fontsize=12)
+    # ax.set_title('Tag Distribution', fontsize=14, fontweight='bold')
     ax.grid(axis='y', alpha=0.3, linestyle='--')
     plt.tight_layout()
     plt.savefig(f'{output_dir}/marginal_probabilities.png', dpi=300, bbox_inches='tight')
@@ -397,17 +397,17 @@ def main():
     
     plot_model_comparison(results, OUTPUT_DIR)
     
-    # selected = {n: models[n] for n in get_selected_models()}
-    # plot_word_types(selected, test_data, OUTPUT_DIR)
+    selected = {n: models[n] for n in get_selected_models()}
+    plot_word_types(selected, test_data, OUTPUT_DIR)
     
-    # plot_viterbi_vs_posterior(best_model, test_data, OUTPUT_DIR)
-    # plot_marginal_probabilities(best_model, train_data, OUTPUT_DIR)
-    # plot_transition_graph(best_model, OUTPUT_DIR)
-    # plot_transition_matrix(best_model, OUTPUT_DIR)
-    # plot_confusion_matrix(best_model, test_data, OUTPUT_DIR)
-    # plot_initial_probabilities(best_model, OUTPUT_DIR)
-    # plot_viterbi_path(best_model, OUTPUT_DIR)
-    # plot_suffix_patterns(best_model, OUTPUT_DIR)
+    plot_viterbi_vs_posterior(best_model, test_data, OUTPUT_DIR)
+    plot_marginal_probabilities(best_model, train_data, OUTPUT_DIR)
+    plot_transition_graph(best_model, OUTPUT_DIR)
+    plot_transition_matrix(best_model, OUTPUT_DIR)
+    plot_confusion_matrix(best_model, test_data, OUTPUT_DIR)
+    plot_initial_probabilities(best_model, OUTPUT_DIR)
+    plot_viterbi_path(best_model, OUTPUT_DIR)
+    plot_suffix_patterns(best_model, OUTPUT_DIR)
     
     print("\n" + "="*70)
     print("COMPLETE! Check visualizations/ directory")

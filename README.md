@@ -5,31 +5,32 @@ A comprehensive implementation of Hidden Markov Models (HMM) for Part-of-Speech 
 ## Project Structure
 
 ```
-hidden_markov_model/
-├── dataset/                   # CoNLL-U format datasets
+hidden_markov_model_pos_tagging/
+├── dataset/                     # CoNLL-U format datasets
 │   ├── hy_armtdp-ud-train.conllu
 │   ├── hy_armtdp-ud-dev.conllu
 │   └── hy_armtdp-ud-test.conllu
-├── src/                       # Core source code
-│   ├── hmm.py                # Main HMM implementation
-│   ├── hmm_trigram.py        # Trigram (2nd-order) HMM
-│   ├── data_utils.py         # Data loading utilities
-│   ├── evaluation.py         # Evaluation and analysis
-│   ├── config_loader.py      # Configuration loader
-│   └── main.py               # Main training script
-├── examples/                  # Example scripts
-│   ├── basic_usage.py        # Simple usage example
-│   ├── compare_models.py     # Compare HMM variants
-│   └── tag_custom_text.py    # Tag custom Armenian text
-├── visualization/             # Visualization module
-│   ├── visualization.py      # Visualization library
-│   └── visualize_all.py      # Generate all visualizations
-├── visualizations/            # Generated plots (created at runtime)
-├── models/                    # Saved trained models
-├── config.cfg                 # Configuration file
-├── requirements.txt           # Python dependencies
-├── DATASET.md                # Dataset documentation
-└── README.md                 # This file
+├── src/                         # Core source code
+│   ├── hmm.py                   # Main HMM implementation
+│   ├── hmm_trigram.py           # Trigram (2nd-order) HMM
+│   ├── data_utils.py            # Data loading utilities
+│   ├── evaluation.py            # Evaluation and analysis
+│   ├── config_loader.py         # Configuration loader
+│   └── main.py                  # Main training script
+├── examples/                    # Example scripts
+│   ├── basic_usage.py           # Simple usage example
+│   ├── compare_models.py        # Compare HMM variants
+│   └── tag_custom_text.py       # Tag custom Armenian text
+├── visualization/               # Visualization module
+│   ├── visualization.py         # Visualization library
+│   └── visualize_all.py         # Generate all visualizations
+├── visualizations/              # Generated plots (created at runtime)
+├── models/                      # Saved trained models
+├── config.cfg                   # Configuration file
+├── requirements.txt             # Python dependencies
+├── DATASET.md                   # Dataset documentation
+├── README.md                    # README file
+└── HMM_for_POS.pdf              # Project report
 ```
 
 ## Quick Start
@@ -186,3 +187,9 @@ Each model learns four key probability distributions:
 ## License
 
 Educational project for ASDS-25 (YSU) Statistics course.
+
+## Authors
+
+- Mane Mkhitaryan [@ManeMkh] (https://github.com/ManeMkh)
+- Eduard Danielyan [@DanielyanEduard] (https://github.com/DanielyanEduard)
+- Albert Piliposyan [@albpiliposyan] (https://github.com/albpiliposyan)
