@@ -705,7 +705,7 @@ def create_all_visualizations(hmm, test_data, output_dir='visualizations'):
     if test_data:
         sample = test_data[0]
         words = [w for w, t in sample]
-        words = ['Ես',   'իմ',  'անուշ', 'Հայաստանի', 'արևահամ', 'բառն', 'եմ',  'սիրում', '։']
+        words = ['Ես',   'իմ',  'անուշ', 'Հայաստանի', 'արևահամ', 'բարն', 'եմ',  'սիրում', '։']
         true_tags =     ['PRON', 'DET', 'ADJ',   'PROPN',     'ADJ',     'NOUN', 'AUX', 'VERB',    'PUNCT']
         visualize_viterbi_path(hmm, words, true_tags,
                              save_path=f'{output_dir}/viterbi_path_sample.png')

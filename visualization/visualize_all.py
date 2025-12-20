@@ -271,7 +271,7 @@ def plot_initial_probabilities(model, output_dir):
 
 def plot_viterbi_path(model, output_dir):
     """Path visualization: sample Viterbi decoding"""
-    words =     [ 'Ես',  'իմ', 'անուշ', 'Հայաստանի', 'արևահամ', 'բառն', 'եմ', 'սիրում',  '։'  ]
+    words =     [ 'Ես',  'իմ', 'անուշ', 'Հայաստանի', 'արևահամ', 'բարն', 'եմ', 'սիրում',  '։'  ]
     true_tags = ['PRON', 'DET', 'ADJ',    'PROPN',     'ADJ',   'NOUN', 'AUX', 'VERB', 'PUNCT']
 
     pred_tags = model.predict(words)
